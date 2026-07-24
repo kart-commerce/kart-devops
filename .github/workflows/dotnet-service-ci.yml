@@ -1,0 +1,76 @@
+name: .NET Service CI (Reusable)
+
+# Reusable CI/CD workflow for every kart-<name>-service .NET repo (PLATFORM_BLUEPRINT.md S2.4/S2.5,
+# kart-conventions.md "CI: service repos call the reusable workflow published from kart-devops").
+# Implements the .NET-applicable rows of PLATFORM_BLUEPRINT.md's Quality Gate table (S11):
+#   Coding Standards -> dotnet format, Static/Security Analysis -> vulnerable-package scan,
+#   Unit/Integration/Contract Tests -> dotnet test. Human Code Review and the remaining
+#   non-mechanical gates (Architecture/DDD/Contract-Compatibility approval) happen outside this
+#   workflow, at PR-review time.
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: ".NET SDK version to install (e.g. 8.0.x)."
+        required: true
+        type: string
+      solution-path:
+        description: "Path to the repo's .sln file, relative to the repo root."
+        required: true
+        type: string
+      run-docker-build:
+        description: "Also build the repo's Dockerfile as a smoke check (default true)."
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build-test-scan:
+    name: Build, Test, Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Restore
+        run: dotnet restore "${{ inputs.solution-path }}"
+
+      - name: Coding standards (dotnet format)
+        run: dotnet format "${{ inputs.solution-path }}" --verify-no-changes
+
+      - name: Build (Release)
+        run: dotnet build "${{ inputs.solution-path }}" --no-restore --configuration Release
+
+      - name: Security scan (vulnerable NuGet packages)
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet list "${{ inputs.solution-path }}" package --vulnerable --include-transitive | tee vulnerability-scan.txt
+          if grep -q "has the following vulnerable packages" vulnerability-scan.txt; then
+            echo "::error::Vulnerable NuGet package(s) found - see the scan output above."
+            exit 1
+          fi
+
+      # Docker is preinstalled on GitHub-hosted ubuntu-latest runners, so IntegrationTests'
+      # Testcontainers-backed tests (e.g. real PostgreSQL) run here without extra setup.
+      - name: Test (unit, integration, contract)
+        run: >
+          dotnet test "${{ inputs.solution-path }}" --no-build --configuration Release
+          --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+
+      - name: Docker build smoke check
+        if: ${{ inputs.run-docker-build }}
+        run: docker build -t ci-smoke-check:${{ github.sha }} .

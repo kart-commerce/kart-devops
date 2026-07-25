@@ -1,0 +1,29 @@
+# Minimal single-binary Tempo config for local development (agent-reusables/docs/standards/
+# observability-standards.md: "The full stack ... runs locally via a single shared docker-compose
+# profile ... owned once, centrally"). Not tuned for production - kart-infra owns the real
+# Helm-deployed Tempo config for staging/production.
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+        http:
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal

@@ -1,0 +1,34 @@
+# Provisioned Grafana datasources (agent-reusables/docs/standards/observability-standards.md:
+# "Grafana is the single pane of glass ... its Explore view lets an on-call engineer pivot
+# log -> trace -> metric using the shared trace id"). Provisioned as code so a developer's local
+# Grafana always has all three signals wired up with no manual "Add data source" clicking.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    editable: true
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: true
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+      serviceMap:
+        datasourceUid: prometheus

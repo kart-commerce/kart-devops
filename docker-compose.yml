@@ -415,14 +415,15 @@ services:
       GATEWAY_BASE_URL: http://gateway:8080
       IDENTITY_SERVICE_BASE_URL: http://identity:8080
       REDIS_URL: redis://redis:6379
-      # ADMIN_SERVICE_BASE_URL / ANALYTICS_SERVICE_BASE_URL intentionally left unset --
-      # kart-admin-service and kart-analytics-service are unscaffolded stubs (no code yet).
-      # admin-web's own BFF already turns an unreachable upstream into a clean 502
-      # "upstream_unavailable" response, so those specific admin-web panels will correctly
-      # show as unavailable until those two services are actually built.
+      ADMIN_SERVICE_BASE_URL: http://admin:8080
+      # ANALYTICS_SERVICE_BASE_URL intentionally left unset -- kart-analytics-service is still
+      # an unscaffolded stub (no code yet). admin-web's own BFF already turns an unreachable
+      # upstream into a clean 502 "upstream_unavailable" response, so its analytics panel will
+      # correctly show as unavailable until that service is actually built.
     depends_on:
       gateway: { condition: service_started }
       redis: { condition: service_healthy }
+      admin: { condition: service_started }
 
 volumes:
   postgres-data:

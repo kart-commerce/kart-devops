@@ -12,3 +12,4 @@ CREATE DATABASE kart_payment;
 CREATE DATABASE kart_offer;
 CREATE DATABASE kart_wishlist;
 CREATE DATABASE kart_notification;
+CREATE DATABASE kart_admin;

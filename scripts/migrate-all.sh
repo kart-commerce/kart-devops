@@ -28,6 +28,7 @@ SERVICES=(
   "offer|kart-offer-service|kart_offer|OFFER_DB_CONNECTION_STRING"
   "wishlist|kart-wishlist-service|kart_wishlist|WISHLIST_DB_CONNECTION_STRING"
   "notification|kart-notification-service|kart_notification|NOTIFICATION_DB_CONNECTION_STRING"
+  "admin|kart-admin-service|kart_admin|ADMIN_DB_CONNECTION_STRING"
 )
 
 FAILED=()

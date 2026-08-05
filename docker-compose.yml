@@ -7,8 +7,9 @@
 # that actually validates a real Kubernetes deployment. Both are intentional; they serve
 # different jobs (README.md explains the split).
 #
-# Excludes 5 stub services with no code yet (review, shipping, recommendation, analytics, admin)
-# -- add them here once they're actually scaffolded.
+# Excludes 4 stub services with no code yet (review, shipping, recommendation, analytics)
+# -- add them here once they're actually scaffolded. kart-admin-service was scaffolded and
+# added below.
 #
 # Usage: scripts/dev-up.sh (generates compose/globalconfig/ on first run, then `docker compose up`)
 
@@ -332,6 +333,27 @@ services:
     depends_on:
       mongo: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+
+  admin:
+    build:
+      context: ../kart-admin-service
+    container_name: kart-admin
+    ports:
+      - "8094:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/admin.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+      product: { condition: service_started }
+      category: { condition: service_started }
+      offer: { condition: service_started }
+      inventory: { condition: service_started }
 
   # ---------------------------------------------------------------------------
   # Edge

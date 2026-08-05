@@ -173,5 +173,24 @@ cat > "$OUT_DIR/delivery-tracking.json" <<'EOF'
 }
 EOF
 
+# admin — Postgres-only (no Mongo/Redis, per its own database-design.md), plus its
+# service-principal client-credentials secret for calling Identity's real lock/unlock routes
+# and the five owning services' in-cluster base URLs it proxies write calls to.
+cat > "$OUT_DIR/admin.json" <<'EOF'
+{
+  "ConnectionStrings": { "AdminDatabase": "Host=postgres;Port=5432;Database=kart_admin;Username=postgres;Password=postgres" },
+  "RabbitMq": { "HostName": "rabbitmq", "UserName": "kart", "Password": "kart123" },
+  "Identity": { "JwksUri": "http://identity:8080/.well-known/jwks.json" },
+  "IdentityClientCredentials": { "ClientId": "admin-service", "ClientSecret": "dev-admin-service-client-secret", "Scope": "admin" },
+  "DownstreamServices": {
+    "Product": { "BaseUrl": "http://product:8080" },
+    "Category": { "BaseUrl": "http://category:8080" },
+    "Offer": { "BaseUrl": "http://offer:8080" },
+    "Identity": { "BaseUrl": "http://identity:8080" },
+    "Inventory": { "BaseUrl": "http://inventory:8080" }
+  }
+}
+EOF
+
 touch "$OUT_DIR/.generated"
 echo "Done. Wrote $(ls "$OUT_DIR"/*.json | wc -l) globalconfig files to $OUT_DIR"

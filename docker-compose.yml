@@ -1,0 +1,409 @@
+# Full local-dev platform stack: every real (non-stub) kart-*-service, the api-gateway, both
+# Angular apps, and the shared infra they need -- one shared Postgres/Mongo/Redis/RabbitMQ/
+# OpenSearch instead of each service's own per-repo compose file's separate containers (those
+# collide on host ports if run side-by-side; see scripts/README or kart-platform's own
+# investigation for the full inventory). This is the FAST inner dev loop -- see
+# kart-infra/docs/adr/0001-local-cluster-tool-kind.md for the separate, heavier kind+Helm path
+# that actually validates a real Kubernetes deployment. Both are intentional; they serve
+# different jobs (README.md explains the split).
+#
+# Excludes 5 stub services with no code yet (review, shipping, recommendation, analytics, admin)
+# -- add them here once they're actually scaffolded.
+#
+# Usage: scripts/dev-up.sh (generates compose/globalconfig/ on first run, then `docker compose up`)
+
+services:
+  # ---------------------------------------------------------------------------
+  # Shared infrastructure
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: kart-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432" # host 5433 -- 5432 is commonly already taken by a local Postgres install
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./compose/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: kart-mongo
+    ports:
+      - "27018:27017" # host 27018 -- 27017 is commonly already taken by a local Mongo install
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: kart-redis
+    ports:
+      - "6380:6379" # host 6380 -- 6379 is commonly already taken by a local Redis install
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: kart-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: kart
+      RABBITMQ_DEFAULT_PASS: kart123
+    ports:
+      - "5673:5672"   # AMQP - host 5673, 5672 is commonly already taken
+      - "15672:15672" # management UI - http://localhost:15672 (kart/kart123)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: kart-opensearch
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/9200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  # ---------------------------------------------------------------------------
+  # Backend services (13 real, scaffolded services -- 5 stubs intentionally excluded)
+  # ---------------------------------------------------------------------------
+  identity:
+    build:
+      context: ../kart-identity-service
+    container_name: kart-identity
+    ports:
+      - "8081:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/identity.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  category:
+    build:
+      context: ../kart-category-service
+    container_name: kart-category
+    ports:
+      - "8084:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/category.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  user:
+    build:
+      context: ..
+      dockerfile: kart-user-service/Dockerfile
+    container_name: kart-user
+    ports:
+      - "8082:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/user.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  product:
+    build:
+      context: ..
+      dockerfile: kart-product-service/Dockerfile
+    container_name: kart-product
+    ports:
+      - "8083:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/product.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  search:
+    build:
+      context: ..
+      dockerfile: kart-search-service/Dockerfile
+    container_name: kart-search
+    ports:
+      - "8085:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/search.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+      product: { condition: service_started }
+
+  inventory:
+    build:
+      context: ../kart-inventory-service
+    container_name: kart-inventory
+    ports:
+      - "8086:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/inventory.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  cart:
+    build:
+      context: ..
+      dockerfile: kart-cart-service/Dockerfile
+    container_name: kart-cart
+    ports:
+      - "8087:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/cart.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      inventory: { condition: service_started }
+      identity: { condition: service_started }
+
+  order:
+    build:
+      context: ../kart-order-service
+    container_name: kart-order
+    ports:
+      - "8088:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/order.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      inventory: { condition: service_started }
+      identity: { condition: service_started }
+
+  payment:
+    build:
+      context: ../kart-payment-service
+    container_name: kart-payment
+    ports:
+      - "8089:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/payment.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  offer:
+    build:
+      context: ../kart-offer-service
+    container_name: kart-offer
+    ports:
+      - "8090:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/offer.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  wishlist:
+    build:
+      context: ..
+      dockerfile: kart-wishlist-service/Dockerfile
+    container_name: kart-wishlist
+    ports:
+      - "8091:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/wishlist.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      product: { condition: service_started }
+      identity: { condition: service_started }
+
+  notification:
+    build:
+      context: ../kart-notification-service
+    container_name: kart-notification
+    ports:
+      - "8092:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/notification.json:/app/globalconfig.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  delivery-tracking:
+    build:
+      context: ../kart-delivery-tracking-service
+    container_name: kart-delivery-tracking
+    ports:
+      - "8093:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ./compose/globalconfig/delivery-tracking.json:/app/globalconfig.json:ro
+    depends_on:
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  # ---------------------------------------------------------------------------
+  # Edge
+  # ---------------------------------------------------------------------------
+  gateway:
+    build:
+      context: ../kart-api-gateway
+    container_name: kart-gateway
+    ports:
+      - "8100:8080" # host 8100 -- 8080 is commonly already taken by something else on a dev box
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    depends_on:
+      identity: { condition: service_started }
+      category: { condition: service_started }
+      user: { condition: service_started }
+      product: { condition: service_started }
+      search: { condition: service_started }
+      inventory: { condition: service_started }
+      cart: { condition: service_started }
+      order: { condition: service_started }
+      payment: { condition: service_started }
+      offer: { condition: service_started }
+      wishlist: { condition: service_started }
+      delivery-tracking: { condition: service_started }
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ../kart-web
+    container_name: kart-web
+    ports:
+      - "4210:4000" # host 4210 -- 4200 is commonly already taken by a local `ng serve`
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      GATEWAY_BASE_URL: http://gateway:8080
+      IDENTITY_SERVICE_BASE_URL: http://identity:8080
+      REDIS_URL: redis://redis:6379
+      # @angular/ssr's built-in SSRF guard rejects a Host header it doesn't recognize -- it
+      # checks the hostname only (port stripped), so this is "localhost", not "localhost:4210".
+      NG_ALLOWED_HOSTS: "localhost"
+    depends_on:
+      gateway: { condition: service_started }
+      redis: { condition: service_healthy }
+
+  admin-web:
+    build:
+      context: ../kart-admin-web
+    container_name: kart-admin-web
+    ports:
+      - "4300:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      GATEWAY_BASE_URL: http://gateway:8080
+      IDENTITY_SERVICE_BASE_URL: http://identity:8080
+      REDIS_URL: redis://redis:6379
+      # ADMIN_SERVICE_BASE_URL / ANALYTICS_SERVICE_BASE_URL intentionally left unset --
+      # kart-admin-service and kart-analytics-service are unscaffolded stubs (no code yet).
+      # admin-web's own BFF already turns an unreachable upstream into a clean 502
+      # "upstream_unavailable" response, so those specific admin-web panels will correctly
+      # show as unavailable until those two services are actually built.
+    depends_on:
+      gateway: { condition: service_started }
+      redis: { condition: service_healthy }
+
+volumes:
+  postgres-data:
+  mongo-data:
+  rabbitmq-data:
+  opensearch-data:

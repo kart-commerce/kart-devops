@@ -5,6 +5,136 @@ Reusable GitHub Actions workflows, pipeline templates, and shared linter/scanner
 via `workflow_call`"; kart-conventions.md "CI: service repos call the reusable workflow published
 from kart-devops"). Nothing here is deployed - it's consumed by other repos' `.github/workflows/ci.yml`.
 
+## Full platform stack (`docker-compose.yml`)
+
+Brings up every real (scaffolded) backend service, `kart-api-gateway`, both Angular apps
+(`kart-web`, `kart-admin-web`), and one shared Postgres/Mongo/Redis/RabbitMQ/OpenSearch, all on
+one Docker network, with one command. This is the fast day-to-day coding loop — see
+[kart-infra](../kart-infra) for the separate kind+Helm path that validates a real Kubernetes
+deployment ([ADR-0001](../kart-infra/docs/adr/0001-local-cluster-tool-kind.md)); the two are
+intentionally different tools for different jobs, not competing choices. kind+Helm proves the
+production-shaped deployment story; this stack is for iterating on code across many services at
+once without a rebuild-image/helm-upgrade/wait-for-rollout cycle on every change.
+
+**Excluded on purpose:** `kart-review-service`, `kart-shipping-service`,
+`kart-recommendation-service`, `kart-analytics-service`, `kart-admin-service` have no code yet
+(stub repos — just a README). Add them here once they're actually scaffolded. `kart-api-gateway`
+itself was also a stub before this stack existed — this repo's compose work included scaffolding
+a real (if intentionally minimal) YARP gateway for it; see that repo's own README for scope.
+
+### Quickstart
+
+```bash
+scripts/dev-up.sh          # generates dev-only secrets on first run, then docker compose up --build -d
+scripts/migrate-all.sh     # apply EF Core migrations (run once, and again after pulling new migrations)
+scripts/dev-logs.sh        # tail every service's logs together (or dev-logs.sh <service> for one)
+scripts/dev-down.sh        # stop everything (-v also wipes data volumes)
+```
+
+Then:
+
+| What | URL |
+|---|---|
+| API Gateway (what the FE talks to) | http://localhost:8100 |
+| kart-web (storefront) | http://localhost:4210 |
+| kart-admin-web (back office) | http://localhost:4300 |
+| RabbitMQ management UI | http://localhost:15672 (`kart` / `kart123`) |
+| Shared observability (Grafana etc.) | run `docker compose -f docker-compose.observability.yml up -d` alongside — see below |
+
+### Why a generated `globalconfig.json` per service, not plain `environment:` vars
+
+Every service calls `Kart.Shared.Configuration`'s `AddKartGlobalConfig()`, which layers a
+`GlobalConfig:Path` JSON file on top of whatever config exists **last** — so it silently wins
+over a same-named `environment:` value, and the app refuses to boot if that path doesn't resolve
+at all. Rather than fight that precedence, `scripts/generate-globalconfig.sh` writes one
+`compose/globalconfig/<service>.json` per service (throwaway local-dev secrets — a fresh JWT
+signing keypair, shared dev DB/broker credentials, cross-service URLs already pointed at this
+compose network's service names) and every app container mounts only its own file. Gitignored;
+re-run the script (`--force` to regenerate) any time you want fresh secrets.
+
+### Ports
+
+| Service | Host port |
+|---|---|
+| gateway | 8100 |
+| identity | 8081 |
+| user | 8082 |
+| product | 8083 |
+| category | 8084 |
+| search | 8085 |
+| inventory | 8086 |
+| cart | 8087 |
+| order | 8088 |
+| payment | 8089 |
+| offer | 8090 |
+| wishlist | 8091 |
+| notification | 8092 |
+| delivery-tracking | 8093 |
+| web / admin-web | 4210 / 4300 |
+| postgres / mongo / redis / rabbitmq / opensearch | 5433 / 27018 / 6380 / 5673 (+15672 UI) / 9200 |
+
+Several host ports are shifted off their conventional defaults (gateway 8100 not 8080, web 4210
+not 4200, postgres 5433, mongo 27018, redis 6380, rabbitmq 5673) because dev machines commonly
+already have something bound to the default -- a local Postgres/Mongo/Redis install, another
+RabbitMQ container, or an `ng serve` in progress. Containers still talk to each other by their
+compose service name on the *container's own* default port (`redis:6379`, `postgres:5432`, etc.)
+regardless of the host-side mapping.
+
+### Known scope limits (flagged, not silently dropped)
+
+- **Gateway routing extends beyond its approved release-0 scope.** `kart-api-gateway`'s own
+  `tickets.md` (GW-1) only scoped routing to `kart-identity-service` + `kart-category-service`;
+  this stack's gateway routes to all 13 real services using a defensible default (public-catalog
+  GET routes anonymous, everything else requires a bearer token) since that's what a stack
+  bringing up 13 services actually needs. Not yet built: Redis-backed revocation check (GW-4),
+  tiered rate limiting (GW-5), per-cluster circuit breaking (GW-7) — routing + JWT validation +
+  forwarding only.
+- **No sharded Mongo, no per-service RabbitMQ users.** Several services' own individual
+  `docker-compose.yml` run a 4-node sharded Mongo cluster or a service-specific RabbitMQ user —
+  simplified here to one single-node Mongo and one shared RabbitMQ user (`kart`/`kart123`) across
+  every service, since sharding/isolation is a staging concern (kind+Helm's job), not a feature-
+  dev-loop concern.
+- **App containers have no `HEALTHCHECK`.** Only ~7 of 13 services expose `/health/ready` at all,
+  and the base ASP.NET runtime image has no `curl`/`wget` to probe it with anyway. `depends_on`
+  gates on the *infra* containers' health (Postgres/Mongo/Redis/RabbitMQ all have real
+  healthchecks) but not on other app containers being fully ready — each service's own
+  `StartupConnectivityChecks` will log loudly if it raced a dependency; `docker compose restart
+  <service>` if one comes up before what it needs.
+
+### Real bugs this stack's first end-to-end run surfaced and fixed
+
+None of these were compose-wiring issues — every one reproduces in a plain `docker build`/`dotnet
+run` of the affected repo alone. Bringing up all 13 services together for the first time is what
+actually exercised these paths:
+
+- **Missing `Directory.Build.props`/`nuget.config`/`packages/`/`contracts/` COPY lines** in several
+  services' own `Dockerfile` (`kart-identity-service`, `kart-category-service`,
+  `kart-inventory-service`, `kart-user-service`, `kart-cart-service`, `kart-product-service`,
+  `kart-search-service`) — each had never actually been through a real `docker build` before.
+- **No `.dockerignore` excluding `**/bin/`, `**/obj/`, `**/appsettings.Local.json`** in several
+  repos (`kart-identity-service`, `kart-user-service`, `kart-cart-service`, `kart-payment-service`,
+  `kart-wishlist-service`) plus the shared `kart-commerce/.dockerignore` this repo's own scripts
+  generate (needed for the 5 services that build with `kart-commerce/` as context) — without it, a
+  developer's own stale `obj/` output or personal `appsettings.Local.json` (pointing
+  `GlobalConfig:Path` at their own machine) gets copied into the image and either corrupts the
+  restore or makes the container try to read a path that only exists on the original dev's laptop.
+- **`kart-category-service` and `kart-user-service`'s own `RabbitMqOptions` class never had
+  `UserName`/`Password` properties at all** — only `kart-identity-service` (the actual reference
+  implementation) had them wired through to `RabbitMqConnectionSettings`. Both always connected as
+  RabbitMQ's default `guest` user, which only works over a literal loopback connection — fixed to
+  match identity's already-correct pattern.
+- **`kart-wishlist-service`'s `DigestFlushHostedService` (singleton) directly constructor-injected
+  a `Scoped` service** (`IWishlistDigestAccumulator`) — .NET's DI container only validates this at
+  startup when `ASPNETCORE_ENVIRONMENT=Development` (the default), which this service had
+  apparently never actually been booted under before. Fixed the same way the same file already
+  handled its `ISender` dependency: resolve it from `IServiceScopeFactory.CreateScope()` instead.
+- **`kart-admin-web`'s Express 5 SPA-fallback route (`'/*splat'`) never matched the site root**
+  (`path-to-regexp` v8's bare `*name` wildcard requires >=1 path segment) — every other route
+  worked, only `GET /` 404'd. Fixed to `'/{*splat}'` (the optional-segment form).
+- **`@angular/ssr`'s built-in Host-header SSRF guard** rejects any Host it doesn't recognize —
+  needs `NG_ALLOWED_HOSTS` set (hostname only, no port — the check strips the port before
+  comparing) since the browser reaches `kart-web` on host port 4210, not its own internal 4000.
+
 ## Workflows
 
 ### `.github/workflows/dotnet-service-ci.yml`

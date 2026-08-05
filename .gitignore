@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Generated per-machine dev secrets (scripts/generate-globalconfig.sh regenerates these)
+compose/globalconfig/

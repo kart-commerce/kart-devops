@@ -4,4 +4,4 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-docker compose logs -f --tail=200 "$@"
+docker compose --env-file ports.env logs -f --tail=200 "$@"

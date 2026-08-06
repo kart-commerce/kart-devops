@@ -8,6 +8,12 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# ports.env is the single source of truth for every host port below -- see its own header
+# comment and README.md's Ports table.
+set -a
+source ports.env
+set +a
+
 ./scripts/generate-globalconfig.sh
 
 # kart-commerce/ (the parent of every kart-*-service repo) isn't itself a git repo, so this
@@ -33,9 +39,9 @@ EOF
 fi
 
 echo "Building and starting the stack (this can take a while the first time)..."
-docker compose up --build -d
+docker compose --env-file ports.env up --build -d
 
-cat <<'EOF'
+cat <<EOF
 
 Stack starting. Useful next steps:
   scripts/dev-logs.sh                 tail every service's logs together
@@ -45,10 +51,10 @@ Stack starting. Useful next steps:
                                        and again any time a service adds a new migration)
 
 Once migrated:
-  Gateway (what the FE talks to):     http://localhost:8100
-  kart-web (storefront):              http://localhost:4210
-  kart-admin-web (back office):       http://localhost:4300
-  RabbitMQ management UI:             http://localhost:15672  (kart / kart123)
+  Gateway (what the FE talks to):     http://localhost:${GATEWAY_PORT}
+  kart-web (storefront):              http://localhost:${WEB_PORT}
+  kart-admin-web (back office):       http://localhost:${ADMIN_WEB_PORT}
+  RabbitMQ management UI:             http://localhost:${RABBITMQ_UI_PORT}  (kart / kart123)
 
 scripts/dev-down.sh stops everything. See README.md for the full port table and how this
 relates to kart-infra's kind/Helm cluster.

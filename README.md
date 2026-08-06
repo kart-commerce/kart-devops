@@ -54,6 +54,13 @@ re-run the script (`--force` to regenerate) any time you want fresh secrets.
 
 ### Ports
 
+**[`ports.env`](ports.env) is the single source of truth** for every host port in the table
+below -- not a secret (unlike `compose/globalconfig/`), committed to git, read directly by this
+file's own `${..._PORT}` interpolation. `scripts/dev-up.sh`/`dev-down.sh`/`dev-logs.sh` already
+pass `docker compose --env-file ports.env`; run that flag yourself if you're calling `docker
+compose` directly instead of through those scripts. Change a port in exactly one place --
+`ports.env` -- then update its non-Docker consumers listed below to match.
+
 | Service | Host port |
 |---|---|
 | gateway | 8100 |
@@ -70,6 +77,7 @@ re-run the script (`--force` to regenerate) any time you want fresh secrets.
 | wishlist | 8091 |
 | notification | 8092 |
 | delivery-tracking | 8093 |
+| admin | 8094 |
 | web / admin-web | 4210 / 4300 |
 | postgres / mongo / redis / rabbitmq / opensearch | 5433 / 27018 / 6380 / 5673 (+15672 UI) / 9200 |
 
@@ -79,6 +87,44 @@ already have something bound to the default -- a local Postgres/Mongo/Redis inst
 RabbitMQ container, or an `ng serve` in progress. Containers still talk to each other by their
 compose service name on the *container's own* default port (`redis:6379`, `postgres:5432`, etc.)
 regardless of the host-side mapping.
+
+**These are the canonical ports, full stop** -- every backend service's own repo points at the
+same host port for local, non-Docker dev too, not a random Visual-Studio-assigned port. How each
+kind of consumer stays in sync, since a JSON/YAML config file can't literally import a value from
+`ports.env` the way code can:
+
+- **Compiled code** (C# option-class defaults, e.g. `kart-cart-service`'s `GrpcOptions`,
+  `kart-wishlist-service`'s `ProductServiceOptions`) references
+  `Kart.Shared.Configuration.KartServiceEndpoints` -- the genuinely DRY, single-copy case, since
+  `kart-shared` is already a cross-repo dependency every service's `Infrastructure` project can
+  reference. See that class's own header comment.
+- **`kart-web`/`kart-admin-web`** converge every port their BFF/Angular code touches into one
+  `src/app/core/config/service-endpoints.ts` per app (framework-agnostic, importable from both
+  the browser-bundled `app-config.ts` and the Node-only `server/bff/*` clients) -- also genuinely
+  DRY *within* each app.
+- **Each service's own standalone `docker-compose.yml`** uses `${SERVICE_PORT:-<default>}`
+  interpolation -- `source ../kart-devops/ports.env` before `docker compose up` to pull the live
+  value from this file's registry; the `:-<default>` half is only a fallback for running that
+  repo fully standalone, with no `kart-devops` checkout alongside it.
+- **`launchSettings.json`, `appsettings.Development.json`, `.env.example`, `proxy.conf.json`** are
+  necessarily literal -- `dotnet run`/Compose/Node's `--env-file` have no mechanism to import a
+  value from another file at the JSON/text level without a code-generation step (this repo has no
+  such step for these files, unlike `compose/globalconfig/`'s generated secrets). Each of these
+  is commented in place pointing back at `ports.env` as its source of truth; keeping them in sync
+  on a port change is a manual, but small and clearly-flagged, step.
+
+The intent either way: a service (or the whole stack) reachable at the same port whether it's
+running via this compose file, a service's own standalone `docker-compose.yml`, or a bare
+`dotnet run` -- no more "which port is identity on today" drift between how devops brings it up
+and how a developer runs it locally. `kart-api-gateway`'s own `appsettings.Development.json`
+repoints its route table's cluster addresses at `localhost:<port>` the same way, for running the
+whole stack bare-metal through the gateway without Docker at all.
+
+Infra ports (Postgres/Mongo/Redis/RabbitMQ/OpenSearch) are the one deliberate exception: each
+service's own standalone `docker-compose.yml` runs its own full-fidelity infra (sharded Mongo,
+a dedicated RabbitMQ user, etc. -- see "Known scope limits" above) on its own, independently
+chosen host ports, so those are *not* unified with this stack's shared-infra ports above; running
+a service's own compose file and this stack side by side is not a supported combination anyway.
 
 ### Known scope limits (flagged, not silently dropped)
 

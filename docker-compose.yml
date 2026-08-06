@@ -12,6 +12,13 @@
 # added below.
 #
 # Usage: scripts/dev-up.sh (generates compose/globalconfig/ on first run, then `docker compose up`)
+#
+# Every host port below is `${..._PORT}` interpolated from ports.env -- the single source of
+# truth README.md's Ports table and every other file that needs one of these values (each
+# service's own launchSettings.json/appsettings.Development.json/docker-compose.yml,
+# kart-web's/kart-admin-web's .env.example/proxy.conf.json/app-config.ts) is documented as
+# mirroring. scripts/dev-up.sh/dev-down.sh/dev-logs.sh already pass `--env-file ports.env`;
+# run `docker compose --env-file ports.env <command>` directly if you're not using those scripts.
 
 services:
   # ---------------------------------------------------------------------------
@@ -24,7 +31,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432" # host 5433 -- 5432 is commonly already taken by a local Postgres install
+      - "${POSTGRES_PORT}:5432" # 5432 is commonly already taken by a local Postgres install
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./compose/postgres-init:/docker-entrypoint-initdb.d:ro
@@ -38,7 +45,7 @@ services:
     image: mongo:7
     container_name: kart-mongo
     ports:
-      - "27018:27017" # host 27018 -- 27017 is commonly already taken by a local Mongo install
+      - "${MONGO_PORT}:27017" # 27017 is commonly already taken by a local Mongo install
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -51,7 +58,7 @@ services:
     image: redis:7-alpine
     container_name: kart-redis
     ports:
-      - "6380:6379" # host 6380 -- 6379 is commonly already taken by a local Redis install
+      - "${REDIS_PORT}:6379" # 6379 is commonly already taken by a local Redis install
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -65,8 +72,8 @@ services:
       RABBITMQ_DEFAULT_USER: kart
       RABBITMQ_DEFAULT_PASS: kart123
     ports:
-      - "5673:5672"   # AMQP - host 5673, 5672 is commonly already taken
-      - "15672:15672" # management UI - http://localhost:15672 (kart/kart123)
+      - "${RABBITMQ_AMQP_PORT}:5672" # AMQP - 5672 is commonly already taken
+      - "${RABBITMQ_UI_PORT}:15672"  # management UI - http://localhost:15672 (kart/kart123)
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -83,7 +90,7 @@ services:
       DISABLE_SECURITY_PLUGIN: "true"
       OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
+      - "${OPENSEARCH_PORT}:9200"
     volumes:
       - opensearch-data:/usr/share/opensearch/data
     healthcheck:
@@ -100,7 +107,7 @@ services:
       context: ../kart-identity-service
     container_name: kart-identity
     ports:
-      - "8081:8080"
+      - "${IDENTITY_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -117,7 +124,7 @@ services:
       context: ../kart-category-service
     container_name: kart-category
     ports:
-      - "8084:8080"
+      - "${CATEGORY_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -136,7 +143,7 @@ services:
       dockerfile: kart-user-service/Dockerfile
     container_name: kart-user
     ports:
-      - "8082:8080"
+      - "${USER_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -155,7 +162,7 @@ services:
       dockerfile: kart-product-service/Dockerfile
     container_name: kart-product
     ports:
-      - "8083:8080"
+      - "${PRODUCT_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -174,7 +181,7 @@ services:
       dockerfile: kart-search-service/Dockerfile
     container_name: kart-search
     ports:
-      - "8085:8080"
+      - "${SEARCH_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -192,7 +199,7 @@ services:
       context: ../kart-inventory-service
     container_name: kart-inventory
     ports:
-      - "8086:8080"
+      - "${INVENTORY_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -211,7 +218,7 @@ services:
       dockerfile: kart-cart-service/Dockerfile
     container_name: kart-cart
     ports:
-      - "8087:8080"
+      - "${CART_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -231,7 +238,7 @@ services:
       context: ../kart-order-service
     container_name: kart-order
     ports:
-      - "8088:8080"
+      - "${ORDER_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -250,7 +257,7 @@ services:
       context: ../kart-payment-service
     container_name: kart-payment
     ports:
-      - "8089:8080"
+      - "${PAYMENT_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -268,7 +275,7 @@ services:
       context: ../kart-offer-service
     container_name: kart-offer
     ports:
-      - "8090:8080"
+      - "${OFFER_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -287,7 +294,7 @@ services:
       dockerfile: kart-wishlist-service/Dockerfile
     container_name: kart-wishlist
     ports:
-      - "8091:8080"
+      - "${WISHLIST_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -307,7 +314,7 @@ services:
       context: ../kart-notification-service
     container_name: kart-notification
     ports:
-      - "8092:8080"
+      - "${NOTIFICATION_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -323,7 +330,7 @@ services:
       context: ../kart-delivery-tracking-service
     container_name: kart-delivery-tracking
     ports:
-      - "8093:8080"
+      - "${DELIVERY_TRACKING_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -339,7 +346,7 @@ services:
       context: ../kart-admin-service
     container_name: kart-admin
     ports:
-      - "8094:8080"
+      - "${ADMIN_PORT}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
@@ -363,7 +370,7 @@ services:
       context: ../kart-api-gateway
     container_name: kart-gateway
     ports:
-      - "8100:8080" # host 8100 -- 8080 is commonly already taken by something else on a dev box
+      - "${GATEWAY_PORT}:8080" # 8080 is commonly already taken by something else on a dev box
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       Observability__Otlp__Endpoint: http://otel-collector:4317
@@ -389,7 +396,7 @@ services:
       context: ../kart-web
     container_name: kart-web
     ports:
-      - "4210:4000" # host 4210 -- 4200 is commonly already taken by a local `ng serve`
+      - "${WEB_PORT}:4000" # 4200 is commonly already taken by a local `ng serve`
     environment:
       PORT: 4000
       NODE_ENV: production
@@ -408,7 +415,7 @@ services:
       context: ../kart-admin-web
     container_name: kart-admin-web
     ports:
-      - "4300:4000"
+      - "${ADMIN_WEB_PORT}:4000"
     environment:
       PORT: 4000
       NODE_ENV: production

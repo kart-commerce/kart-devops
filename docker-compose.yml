@@ -158,8 +158,7 @@ services:
 
   product:
     build:
-      context: ..
-      dockerfile: kart-product-service/Dockerfile
+      context: ../kart-product-service
     container_name: kart-product
     ports:
       - "${PRODUCT_PORT}:8080"
@@ -171,6 +170,7 @@ services:
       - ./compose/globalconfig/product.json:/app/globalconfig.json:ro
     depends_on:
       postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
       mongo: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       identity: { condition: service_started }

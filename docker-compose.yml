@@ -113,7 +113,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/identity.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/identity:/var/log/kart/identity
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -130,7 +131,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/category.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/category:/var/log/kart/category
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -149,7 +151,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/user.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/user:/var/log/kart/user
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -167,7 +170,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/product.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/product:/var/log/kart/product
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -187,7 +191,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/search.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/search:/var/log/kart/search
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -205,7 +210,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/inventory.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/inventory:/var/log/kart/inventory
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -224,7 +230,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/cart.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/cart:/var/log/kart/cart
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -244,7 +251,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/order.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/order:/var/log/kart/order
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -263,7 +271,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/payment.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/payment:/var/log/kart/payment
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -281,7 +290,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/offer.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/offer:/var/log/kart/offer
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -300,7 +310,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/wishlist.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/wishlist:/var/log/kart/wishlist
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -320,7 +331,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/notification.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/notification:/var/log/kart/notification
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -336,7 +348,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/delivery-tracking.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/delivery-tracking:/var/log/kart/delivery-tracking
     depends_on:
       mongo: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -352,7 +365,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/admin.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
+      - ./compose/globalconfig/logs/admin:/var/log/kart/admin
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -372,7 +386,17 @@ services:
     ports:
       - "${GATEWAY_PORT}:8080" # 8080 is commonly already taken by something else on a dev box
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      # Every other container's ASPNETCORE_ENVIRONMENT=Development is masked by its own mounted
+      # GlobalConfig file (layered in last - see generate-globalconfig.sh's header comment)
+      # overriding appsettings.Development.json's bare-metal `localhost` addresses back to Docker
+      # DNS names. The gateway has no GlobalConfig file at all (it holds no secrets), so
+      # "Development" here would make it load appsettings.Development.json's Identity:JwksUri AND
+      # every ReverseProxy Cluster destination as `localhost:<port>` - unreachable from inside its
+      # own container, failing every request (auth first, then every proxied call). Program.cs
+      # has no IsDevelopment()-gated behavior (no Swagger here), so this name only controls which
+      # appsettings.*.json layers in - anything other than "Development" leaves appsettings.json's
+      # own correct `http://<service>:8080/` defaults in effect.
+      ASPNETCORE_ENVIRONMENT: Docker
       Observability__Otlp__Endpoint: http://otel-collector:4317
     depends_on:
       identity: { condition: service_started }
@@ -387,6 +411,7 @@ services:
       offer: { condition: service_started }
       wishlist: { condition: service_started }
       delivery-tracking: { condition: service_started }
+      admin: { condition: service_started }
 
   # ---------------------------------------------------------------------------
   # Frontend

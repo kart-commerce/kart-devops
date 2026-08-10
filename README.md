@@ -41,16 +41,27 @@ Then:
 | RabbitMQ management UI | http://localhost:15672 (`kart` / `kart123`) |
 | Shared observability (Grafana etc.) | run `docker compose -f docker-compose.observability.yml up -d` alongside — see below |
 
-### Why a generated `globalconfig.json` per service, not plain `environment:` vars
+### Why a generated shared `global.json`, not plain `environment:` vars
 
-Every service calls `Kart.Shared.Configuration`'s `AddKartGlobalConfig()`, which layers a
-`GlobalConfig:Path` JSON file on top of whatever config exists **last** — so it silently wins
+Every service calls `Kart.Shared.Configuration`'s `AddKartGlobalConfig(serviceName)`, which layers
+a `GlobalConfig:Path` JSON file on top of whatever config exists **last** — so it silently wins
 over a same-named `environment:` value, and the app refuses to boot if that path doesn't resolve
-at all. Rather than fight that precedence, `scripts/generate-globalconfig.sh` writes one
-`compose/globalconfig/<service>.json` per service (throwaway local-dev secrets — a fresh JWT
-signing keypair, shared dev DB/broker credentials, cross-service URLs already pointed at this
-compose network's service names) and every app container mounts only its own file. Gitignored;
-re-run the script (`--force` to regenerate) any time you want fresh secrets.
+at all. Rather than fight that precedence, `scripts/generate-globalconfig.sh` writes **one**
+`compose/globalconfig/global.json` (throwaway local-dev secrets — a fresh JWT signing keypair,
+shared dev DB/broker credentials, cross-service URLs already pointed at this compose network's
+service names), shaped as a `Global` section (platform-wide defaults every service inherits) plus
+one `Services:<name>` block per service (that service's own secrets). Every app container mounts
+that *same* file at `/app/globalconfig.json` — `AddKartGlobalConfig` picks out only the
+`Global` + `Services:<serviceName>` keys that apply to it, using the literal service name each
+container's own `Program.cs` already passes in. Gitignored; re-run the script (`--force` to
+regenerate) any time you want fresh secrets.
+
+Each container also mounts `compose/globalconfig/logs/<service>/` at `/var/log/kart/<service>` —
+`global.json`'s `Global:LogRoot` is `/var/log/kart`, so `Kart.Shared.Configuration` computes the
+exact same `{LogRoot}/{serviceName}` log directory formula Docker and bare-metal local dev both
+use (bare-metal's `kart-internals/globalconfig.json` just sets a different, host-absolute
+`LogRoot`) — `tail -f compose/globalconfig/logs/product/kart-product-service-*.log` reaches the
+same file the container's Serilog file sink writes.
 
 ### Ports
 

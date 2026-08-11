@@ -114,7 +114,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/identity:/var/log/kart/identity
+      - ./compose/globalconfig/logs/identity:/var/log/kart/kart-identity-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -132,7 +132,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/category:/var/log/kart/category
+      - ./compose/globalconfig/logs/category:/var/log/kart/kart-category-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -152,7 +152,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/user:/var/log/kart/user
+      - ./compose/globalconfig/logs/user:/var/log/kart/kart-user-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -171,7 +171,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/product:/var/log/kart/product
+      - ./compose/globalconfig/logs/product:/var/log/kart/kart-product-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -192,7 +192,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/search:/var/log/kart/search
+      - ./compose/globalconfig/logs/search:/var/log/kart/kart-search-service
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -211,7 +211,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/inventory:/var/log/kart/inventory
+      - ./compose/globalconfig/logs/inventory:/var/log/kart/kart-inventory-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -231,7 +231,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/cart:/var/log/kart/cart
+      - ./compose/globalconfig/logs/cart:/var/log/kart/kart-cart-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -252,7 +252,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/order:/var/log/kart/order
+      - ./compose/globalconfig/logs/order:/var/log/kart/kart-order-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -272,7 +272,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/payment:/var/log/kart/payment
+      - ./compose/globalconfig/logs/payment:/var/log/kart/kart-payment-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -291,7 +291,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/offer:/var/log/kart/offer
+      - ./compose/globalconfig/logs/offer:/var/log/kart/kart-offer-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -311,7 +311,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/wishlist:/var/log/kart/wishlist
+      - ./compose/globalconfig/logs/wishlist:/var/log/kart/kart-wishlist-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -332,7 +332,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/notification:/var/log/kart/notification
+      - ./compose/globalconfig/logs/notification:/var/log/kart/kart-notification-service
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -349,7 +349,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/delivery-tracking:/var/log/kart/delivery-tracking
+      - ./compose/globalconfig/logs/delivery-tracking:/var/log/kart/kart-delivery-tracking-service
     depends_on:
       mongo: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -366,7 +366,7 @@ services:
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
       - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/admin:/var/log/kart/admin
+      - ./compose/globalconfig/logs/admin:/var/log/kart/kart-admin-service
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -452,6 +452,15 @@ services:
       # an unscaffolded stub (no code yet). admin-web's own BFF already turns an unreachable
       # upstream into a clean 502 "upstream_unavailable" response, so its analytics panel will
       # correctly show as unavailable until that service is actually built.
+      # Without this, logger.ts (kart-admin-web/src/server/logger.ts) falls back to
+      # ./logs/bff-server.log relative to /app -- a path that only exists inside the
+      # container's own ephemeral filesystem, so it's invisible on the host and lost on
+      # every restart. Point it at the same kart-internals/kart-admin-web/bff-server.log
+      # file local (non-docker) `npm run serve:bff` already writes to (.env.example), via
+      # the bind mount below, so both places land in one file regardless of how the BFF runs.
+      LOG_FILE_PATH: /var/log/kart/admin-web/bff-server.log
+    volumes:
+      - ../kart-internals/kart-admin-web:/var/log/kart/admin-web
     depends_on:
       gateway: { condition: service_started }
       redis: { condition: service_healthy }

@@ -43,10 +43,13 @@ rm -rf "$KEY_DIR"
 
 json() { printf '"%s"' "$1"; }
 
-# Every service's log directory is {Global:LogRoot}/{serviceName}, computed by
-# Kart.Shared.Configuration — matching docker-compose.yml's per-service
-# ./compose/globalconfig/logs/<name>:/var/log/kart/<name> mount, so `tail`-ing a log file on the
-# host reaches the exact file the container's Serilog file sink writes.
+# Every service's log directory is {Global:LogRoot}/{serviceName} (serviceName is the full
+# "kart-<name>-service" string, computed by Kart.Shared.Configuration) — matching
+# docker-compose.yml's per-service ./compose/globalconfig/logs/<name>:/var/log/kart/kart-<name>-service
+# mount, so `tail`-ing a log file on the host reaches the exact file the container's Serilog file
+# sink writes. The mount's destination must use the full service name, not the abbreviated <name>
+# used on the host side below — a prior version of this mount used <name> on both sides, which
+# silently wrote every service's logs into an unmounted container path instead.
 cat > "$OUT_DIR/global.json" <<EOF
 {
   "Global": {
@@ -151,7 +154,8 @@ cat > "$OUT_DIR/global.json" <<EOF
 EOF
 
 # One host-side log directory per service, matching docker-compose.yml's
-# ./compose/globalconfig/logs/<name>:/var/log/kart/<name> mounts.
+# ./compose/globalconfig/logs/<name>:/var/log/kart/kart-<name>-service mounts (host side keeps
+# the short <name>; only the container-side destination needs the service's full name).
 for name in identity category user product search inventory cart order payment offer wishlist notification delivery-tracking admin; do
   mkdir -p "$OUT_DIR/logs/$name"
 done

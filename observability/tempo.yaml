@@ -10,8 +10,15 @@ distributor:
   receivers:
     otlp:
       protocols:
+        # Explicit endpoints are required - an empty `grpc:`/`http:` block does not fall back to
+        # a default bind address in this Tempo version, so the OTLP receiver silently never
+        # starts (confirmed: Tempo's own startup log lists only http=3200/grpc=9095, its internal
+        # server ports - never 4317/4318) and the Collector's otlp/tempo exporter spins forever on
+        # "connection refused" instead. This is why no trace ever reached Tempo before this fix.
         grpc:
+          endpoint: 0.0.0.0:4317
         http:
+          endpoint: 0.0.0.0:4318
 
 ingester:
   max_block_duration: 5m

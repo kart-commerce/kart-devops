@@ -1,0 +1,72 @@
+name: Angular App CI (Reusable)
+
+# Reusable CI/CD workflow for kart-web / kart-admin-web (and any other kart-<name>-web Angular repo)
+# (PLATFORM_BLUEPRINT.md S2.4/S2.5, kart-conventions.md "CI: service repos call the reusable workflow
+# published from kart-devops"). Mirrors dotnet-service-ci.yml's shape for the Node/Angular ecosystem.
+# Implements the Angular-applicable rows of PLATFORM_BLUEPRINT.md's Quality Gate table (S11):
+#   Coding Standards -> `npm run lint` (ESLint via @angular-eslint), Unit/Component Tests -> `ng test`
+#   in headless-Chrome/CI mode, Docker Build Success -> optional Dockerfile smoke build. Human Code
+#   Review and the remaining non-mechanical gates (Architecture/DDD/Contract-Compatibility approval)
+#   happen outside this workflow, at PR-review time.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to install (e.g. 20.x)."
+        required: true
+        type: string
+      working-directory:
+        description: "Directory containing the Angular app's package.json, relative to the repo root."
+        required: false
+        type: string
+        default: "."
+      run-docker-build:
+        description: "Also build the repo's Dockerfile as a smoke check (default true)."
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build-test-lint:
+    name: Lint, Test, Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Coding standards (lint)
+        run: npm run lint
+
+      # ubuntu-latest GitHub-hosted runners ship a system Chrome, so Angular's default
+      # Karma+Jasmine ChromeHeadless launcher works with no extra browser installation step.
+      - name: Test (unit/component, headless Chrome)
+        run: npm run test -- --watch=false --browsers=ChromeHeadless
+
+      - name: Build (production)
+        run: npm run build
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: ${{ inputs.working-directory }}/dist
+          if-no-files-found: ignore
+
+      - name: Docker build smoke check
+        if: ${{ inputs.run-docker-build }}
+        run: docker build -t ci-smoke-check:${{ github.sha }} .

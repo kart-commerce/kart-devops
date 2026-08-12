@@ -1,0 +1,820 @@
+<title>kart-devops আর্কিটেকচার গাইড</title>
+<style>
+  :root {
+    --bg: #eef1ef;
+    --bg-dot: rgba(31, 111, 106, 0.16);
+    --panel: #ffffff;
+    --panel-2: #e4e9e6;
+    --ink: #101615;
+    --ink-soft: #45524c;
+    --ink-faint: #6d7b74;
+    --line: #cfd6d1;
+    --accent: #1f6f6a;
+    --accent-strong: #124b47;
+    --accent-soft: #e3f0ee;
+    --indigo: #445486;
+    --indigo-soft: #e7eaf2;
+    --warn: #a8631b;
+    --warn-soft: #f6e6d3;
+    --violet: #6b5a9e;
+    --violet-soft: #ece8f5;
+    --code-bg: #e4e9e6;
+    --shadow: 0 1px 2px rgba(16, 22, 21, 0.06), 0 8px 24px -12px rgba(16, 22, 21, 0.15);
+    --radius: 7px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1110;
+      --bg-dot: rgba(79, 194, 184, 0.14);
+      --panel: #121a19;
+      --panel-2: #182220;
+      --ink: #e7ece9;
+      --ink-soft: #a9b8b1;
+      --ink-faint: #7c8b84;
+      --line: #24312d;
+      --accent: #4fc2b8;
+      --accent-strong: #8fe6dc;
+      --accent-soft: #16332f;
+      --indigo: #8fa3d9;
+      --indigo-soft: #1c2338;
+      --warn: #e0a352;
+      --warn-soft: #2e2417;
+      --violet: #b3a1e0;
+      --violet-soft: #221d33;
+      --code-bg: #0e1615;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px -14px rgba(0, 0, 0, 0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1110;
+    --bg-dot: rgba(79, 194, 184, 0.14);
+    --panel: #121a19;
+    --panel-2: #182220;
+    --ink: #e7ece9;
+    --ink-soft: #a9b8b1;
+    --ink-faint: #7c8b84;
+    --line: #24312d;
+    --accent: #4fc2b8;
+    --accent-strong: #8fe6dc;
+    --accent-soft: #16332f;
+    --indigo: #8fa3d9;
+    --indigo-soft: #1c2338;
+    --warn: #e0a352;
+    --warn-soft: #2e2417;
+    --violet: #b3a1e0;
+    --violet-soft: #221d33;
+    --code-bg: #0e1615;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px -14px rgba(0, 0, 0, 0.6);
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1ef;
+    --bg-dot: rgba(31, 111, 106, 0.16);
+    --panel: #ffffff;
+    --panel-2: #e4e9e6;
+    --ink: #101615;
+    --ink-soft: #45524c;
+    --ink-faint: #6d7b74;
+    --line: #cfd6d1;
+    --accent: #1f6f6a;
+    --accent-strong: #124b47;
+    --accent-soft: #e3f0ee;
+    --indigo: #445486;
+    --indigo-soft: #e7eaf2;
+    --warn: #a8631b;
+    --warn-soft: #f6e6d3;
+    --violet: #6b5a9e;
+    --violet-soft: #ece8f5;
+    --code-bg: #e4e9e6;
+    --shadow: 0 1px 2px rgba(16, 22, 21, 0.06), 0 8px 24px -12px rgba(16, 22, 21, 0.15);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { transition: none !important; animation: none !important; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image: radial-gradient(circle, var(--bg-dot) 1px, transparent 1.2px);
+    background-size: 26px 26px;
+    color: var(--ink);
+    font-family: "Noto Sans Bengali", "Hind Siliguri", "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Liberation Mono", monospace;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 800; }
+
+  /* ---------- top nav ---------- */
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topnav-inner {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    overflow-x: auto;
+  }
+  .topnav .brand {
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: var(--ink);
+    flex: none;
+    white-space: nowrap;
+  }
+  .topnav .brand .dot { color: var(--accent); }
+  .topnav-links {
+    display: flex;
+    gap: 16px;
+    flex: none;
+  }
+  .topnav-links a {
+    color: var(--ink-soft);
+    font-size: 0.82rem;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+  .topnav-links a:hover { color: var(--accent); text-decoration: none; }
+
+  /* ---------- page shell ---------- */
+  .page { max-width: 1120px; margin: 0 auto; padding: 0 24px 100px; }
+  .prose { max-width: 720px; }
+
+  /* ---------- masthead ---------- */
+  header.masthead {
+    padding: 56px 0 40px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 44px;
+  }
+  .eyebrow {
+    font-family: inherit;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 7px; height: 7px;
+    background: var(--accent);
+    border-radius: 1px;
+    display: inline-block;
+  }
+  h1.title {
+    font-size: clamp(2.1rem, 5vw, 3rem);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    margin-top: 14px;
+    font-size: 1.08rem;
+    color: var(--ink-soft);
+    max-width: 640px;
+  }
+  .meta-chips {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 26px;
+  }
+  .chip {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.76rem;
+    padding: 6px 11px;
+    border: 1px solid var(--line);
+    border-radius: 100px;
+    color: var(--ink-soft);
+    background: var(--panel);
+  }
+  .chip b { color: var(--ink); font-weight: 700; }
+
+  /* ---------- sections ---------- */
+  section { margin-bottom: 68px; scroll-margin-top: 70px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .section-head h2 { font-size: 1.5rem; }
+  .section-head .tag {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  p { color: var(--ink-soft); }
+  section > p.lede { color: var(--ink-soft); max-width: 720px; margin-bottom: 20px; }
+
+  ul.plain { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  ul.plain li {
+    padding-left: 20px;
+    position: relative;
+    color: var(--ink-soft);
+  }
+  ul.plain li::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+  ul.plain li b, ul.plain li strong { color: var(--ink); }
+
+  /* ---------- two-stack cards ---------- */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .card .stamp {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .card h3 { font-size: 1.12rem; margin-bottom: 10px; }
+  .card p { margin: 0; font-size: 0.94rem; }
+  .card.indigo .stamp { color: var(--indigo); }
+
+  /* ---------- file tree panel ---------- */
+  .tree-panel {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .tree-panel .tree-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.76rem;
+    color: var(--ink-faint);
+  }
+  .tree-head .lights { display: flex; gap: 5px; }
+  .tree-head .lights span {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--line);
+  }
+  .tree-body {
+    padding: 18px 20px 20px;
+    overflow-x: auto;
+  }
+  .tree-body table { border-collapse: collapse; width: 100%; }
+  .tree-body td {
+    padding: 3px 0;
+    vertical-align: top;
+    white-space: nowrap;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.82rem;
+  }
+  .tree-body td.path { color: var(--accent-strong); padding-right: 20px; }
+  .tree-body td.path .dim { color: var(--ink-faint); }
+  .tree-body td.desc {
+    color: var(--ink-soft);
+    white-space: normal;
+    font-family: "Noto Sans Bengali", "Hind Siliguri", sans-serif;
+    font-size: 0.88rem;
+  }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table.data { width: 100%; border-collapse: collapse; background: var(--panel); min-width: 640px; }
+  table.data th, table.data td {
+    padding: 11px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.88rem;
+  }
+  table.data thead th {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    background: var(--panel-2);
+  }
+  table.data tbody tr:last-child td { border-bottom: none; }
+  table.data tbody tr:hover { background: var(--panel-2); }
+  table.data td.mono, table.data td .mono-cell {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.82rem;
+    color: var(--ink);
+  }
+  table.data td.num { font-variant-numeric: tabular-nums; }
+  .note { color: var(--ink-faint); font-size: 0.78rem; }
+
+  .pill {
+    display: inline-block;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pill.pg { background: var(--accent-soft); color: var(--accent-strong); }
+  .pill.mongo { background: var(--indigo-soft); color: var(--indigo); }
+  .pill.redis { background: var(--warn-soft); color: var(--warn); }
+  .pill.os { background: var(--violet-soft); color: var(--violet); }
+
+  /* ---------- diagram ---------- */
+  .diagram-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+  }
+  .legend {
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--ink-soft); }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+  .callout {
+    margin-top: 18px;
+    padding: 14px 18px;
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    font-size: 0.86rem;
+    color: var(--ink-soft);
+  }
+  .callout b { color: var(--ink); }
+
+  /* ---------- config flow ---------- */
+  .flow-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    flex-wrap: wrap;
+  }
+  .flow-box {
+    flex: 1;
+    min-width: 180px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .flow-box .k {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 8px;
+  }
+  .flow-box .v { font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace; font-size: 0.86rem; color: var(--ink); font-weight: 600; }
+  .flow-box p { margin: 8px 0 0; font-size: 0.82rem; }
+  .flow-arrow {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    color: var(--accent);
+    font-size: 1.3rem;
+  }
+  .flow-box.win { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, var(--shadow); }
+  .flow-box.win .k { color: var(--accent); }
+
+  /* ---------- steps ---------- */
+  .steps { display: flex; flex-direction: column; gap: 14px; }
+  .step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .step .n {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 1.1rem;
+  }
+  .step .cmd {
+    display: inline-block;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    background: var(--code-bg);
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+    color: var(--accent-strong);
+  }
+  .step p { margin: 0; font-size: 0.9rem; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-faint);
+    font-size: 0.82rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 640px) {
+    header.masthead { padding: 40px 0 32px; }
+    .section-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+  }
+</style>
+
+<div class="topnav">
+  <div class="topnav-inner">
+    <span class="brand">kart<span class="dot">·</span>devops</span>
+    <nav class="topnav-links">
+      <a href="#intro">শুরু</a>
+      <a href="#files">ফাইল ম্যাপ</a>
+      <a href="#services">সার্ভিসসমূহ</a>
+      <a href="#architecture">আর্কিটেকচার</a>
+      <a href="#config">কনফিগ</a>
+      <a href="#workflow">ওয়ার্কফ্লো</a>
+      <a href="#observability">অবজার্ভেবিলিটি</a>
+      <a href="#ci">CI/CD</a>
+    </nav>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="masthead">
+    <span class="eyebrow">Architecture Reference</span>
+    <h1 class="title">kart-devops কীভাবে কাজ করে</h1>
+    <p class="subtitle">
+      পুরো <span class="mono">kart-commerce</span> প্ল্যাটফর্মের কন্ট্রোল রুম — কোনো ব্যবসায়িক লজিক নেই এখানে,
+      বরং ১৩টা মাইক্রোসার্ভিস, একটা গেটওয়ে, দুটো ফ্রন্টএন্ড আর শেয়ার্ড ইনফ্রাকে এক কমান্ডে লোকালি তোলার
+      এবং সব সার্ভিসের CI/CD এক জায়গা থেকে চালানোর দায়িত্ব এর।
+    </p>
+    <div class="meta-chips">
+      <span class="chip"><b>13</b> রিয়েল সার্ভিস</span>
+      <span class="chip"><b>5</b> stub (বাদ)</span>
+      <span class="chip"><b>2</b> স্ট্যাক: compose + CI</span>
+      <span class="chip"><b>5</b> শেয়ার্ড ইনফ্রা</span>
+    </div>
+  </header>
+
+  <!-- ================= INTRO ================= -->
+  <section id="intro">
+    <div class="section-head">
+      <h2>এই রিপো আসলে কী করে</h2>
+      <span class="tag">01 · OVERVIEW</span>
+    </div>
+    <p class="lede">
+      <span class="mono">kart-devops</span> কোনো মাইক্রোসার্ভিসের কোড রাখে না। এর ভেতরে দুটো সম্পূর্ণ আলাদা
+      "স্ট্যাক" আছে — একটা তোমার লোকাল মেশিনে চলে, আরেকটা GitHub-এ।
+    </p>
+    <div class="card-grid">
+      <div class="card">
+        <span class="stamp">Stack A · local dev</span>
+        <h3>docker-compose.yml</h3>
+        <p>
+          ১৩টা রিয়েল সার্ভিস + gateway + দুটো Angular অ্যাপ + Postgres/Mongo/Redis/RabbitMQ/OpenSearch —
+          সব একসাথে এক কমান্ডে তুলে ফেলে, যাতে অনেকগুলো সার্ভিসের মধ্যে কোড পরিবর্তন করে দেখা যায়
+          rebuild-image → helm-upgrade চক্রে না গিয়েই।
+        </p>
+      </div>
+      <div class="card indigo">
+        <span class="stamp">Stack B · CI/CD</span>
+        <h3>.github/workflows/*.yml</h3>
+        <p>
+          প্রতিটা <span class="mono">kart-*-service</span> রিপো নিজের CI তে এই রিপোর reusable workflow
+          <span class="mono">workflow_call</span> দিয়ে কল করে — test, lint, Docker build, contract test,
+          client codegen সবকিছুর নিয়ম এক জায়গায় লেখা।
+        </p>
+      </div>
+    </div>
+    <div class="callout">
+      <b>বাদ দেওয়া হয়েছে:</b> <span class="mono">review</span>, <span class="mono">shipping</span>,
+      <span class="mono">recommendation</span>, <span class="mono">analytics</span> সার্ভিস — এগুলোর এখনো
+      কোনো কোড নেই, শুধু README। কোড লেখা শুরু হলেই এগুলো কম্পোজে যুক্ত হবে।
+    </div>
+  </section>
+
+  <!-- ================= FILE MAP ================= -->
+  <section id="files">
+    <div class="section-head">
+      <h2>ফাইল ম্যাপ — কোনটা কী কাজ করে</h2>
+      <span class="tag">02 · STRUCTURE</span>
+    </div>
+    <p class="lede">রিপোর প্রতিটা ফাইল/ফোল্ডারের একটামাত্র কাজ — কোনোটাই ওভারল্যাপ করে না।</p>
+
+    <div class="tree-panel">
+      <div class="tree-head">
+        <span class="lights"><span></span><span></span><span></span></span>
+        kart-devops/
+      </div>
+      <div class="tree-body">
+        <table>
+          <tr><td class="path">README.md</td><td class="desc">পুরো রিপোর ডকুমেন্টেশন — সব কিছুর সূত্র</td></tr>
+          <tr><td class="path">docker-compose.yml</td><td class="desc">মূল ফাইল — ১৩ সার্ভিস + gateway + 2 frontend + shared infra সংজ্ঞায়িত</td></tr>
+          <tr><td class="path">docker-compose.observability.yml</td><td class="desc">আলাদা, অপশনাল মনিটরিং স্ট্যাক</td></tr>
+          <tr><td class="path"><span class="dim">scripts/</span>dev-up.sh</td><td class="desc">মেইন এন্ট্রি পয়েন্ট — সব বিল্ড+স্টার্ট করে</td></tr>
+          <tr><td class="path"><span class="dim">scripts/</span>dev-down.sh</td><td class="desc">স্ট্যাক বন্ধ করে (<span class="mono">-v</span> দিলে ডেটাও মুছে)</td></tr>
+          <tr><td class="path"><span class="dim">scripts/</span>dev-logs.sh</td><td class="desc">সব/একটা সার্ভিসের লগ tail করে</td></tr>
+          <tr><td class="path"><span class="dim">scripts/</span>migrate-all.sh</td><td class="desc">প্রতিটা .NET সার্ভিসে EF Core migration apply করে</td></tr>
+          <tr><td class="path"><span class="dim">scripts/</span>generate-globalconfig.sh</td><td class="desc">প্রতি সার্ভিসের জন্য secret/config JSON বানায়</td></tr>
+          <tr><td class="path"><span class="dim">compose/globalconfig/</span>*.json</td><td class="desc">(auto-generated, gitignored) প্রতি সার্ভিসের DB/JWT/RabbitMQ secret</td></tr>
+          <tr><td class="path"><span class="dim">compose/postgres-init/</span>01-create-databases.sql</td><td class="desc">Postgres-এ প্রতি সার্ভিসের আলাদা ডেটাবেস বানায়</td></tr>
+          <tr><td class="path"><span class="dim">observability/</span>*.yaml, README.md</td><td class="desc">Grafana/Loki/Tempo/Prometheus/OTel-এর কনফিগ</td></tr>
+          <tr><td class="path"><span class="dim">.github/workflows/</span>*.yml</td><td class="desc">অন্য রিপোগুলো <span class="mono">workflow_call</span> দিয়ে কল করে এমন reusable CI</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SERVICES ================= -->
+  <section id="services">
+    <div class="section-head">
+      <h2>১৩টা সার্ভিস — কে কী করে, কোথায় ডেটা রাখে</h2>
+      <span class="tag">03 · SERVICES</span>
+    </div>
+    <p class="lede">
+      প্রতিটা সার্ভিসের নিজের পোর্ট, নিজের ডেটাস্টোর, আর <span class="mono">compose/globalconfig/&lt;name&gt;.json</span>
+      থেকে বোঝা যাওয়া একটা বিশেষত্ব।
+    </p>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>সার্ভিস</th>
+            <th>কাজ</th>
+            <th>পোর্ট</th>
+            <th>ডেটাস্টোর</th>
+            <th>বিশেষত্ব</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">identity</td><td>লগইন, JWT ইস্যু, MFA</td><td class="mono num">8081</td><td><span class="pill pg">Postgres</span> <span class="pill redis">Redis</span></td><td>বাকি সবাই এর JWKS দিয়ে টোকেন verify করে</td></tr>
+          <tr><td class="mono">user</td><td>ইউজার প্রোফাইল</td><td class="mono num">8082</td><td><span class="pill pg">Postgres</span> <span class="pill mongo">Mongo</span></td><td>—</td></tr>
+          <tr><td class="mono">product</td><td>প্রোডাক্ট ক্যাটালগ</td><td class="mono num">8083</td><td><span class="pill pg">Postgres</span> <span class="pill mongo">Mongo</span></td><td>নিজস্ব JWT signing key (JWKS নয়)</td></tr>
+          <tr><td class="mono">category</td><td>ক্যাটাগরি</td><td class="mono num">8084</td><td><span class="pill pg">Postgres</span> <span class="pill redis">Redis</span></td><td>—</td></tr>
+          <tr><td class="mono">search</td><td>প্রোডাক্ট সার্চ</td><td class="mono num">8085</td><td><span class="pill os">OpenSearch</span></td><td>product-এর Postgres DB সরাসরি read করে (API কল না)</td></tr>
+          <tr><td class="mono">inventory</td><td>স্টক/quantity</td><td class="mono num">8086</td><td><span class="pill pg">Postgres</span> <span class="pill redis">Redis</span></td><td>—</td></tr>
+          <tr><td class="mono">cart</td><td>শপিং কার্ট</td><td class="mono num">8087</td><td><span class="pill pg">Postgres</span> <span class="pill mongo">Mongo</span> <span class="pill redis">Redis</span></td><td>inventory-কে <b>gRPC</b> দিয়ে কল করে (একমাত্র gRPC user)</td></tr>
+          <tr><td class="mono">order</td><td>অর্ডার প্লেস/ট্র্যাক</td><td class="mono num">8088</td><td><span class="pill pg">Postgres</span> <span class="pill mongo">Mongo (read)</span></td><td>inventory + payment দুটোকেই HTTP দিয়ে কল করে</td></tr>
+          <tr><td class="mono">payment</td><td>পেমেন্ট প্রসেস</td><td class="mono num">8089</td><td><span class="pill pg">Postgres</span> <span class="pill mongo">Mongo (read)</span></td><td>simulated gateway — রিয়েল প্রসেসর নয়</td></tr>
+          <tr><td class="mono">offer</td><td>ডিসকাউন্ট/অফার</td><td class="mono num">8090</td><td><span class="pill pg">Postgres</span> <span class="pill mongo">Mongo (read)</span></td><td>—</td></tr>
+          <tr><td class="mono">wishlist</td><td>উইশলিস্ট</td><td class="mono num">8091</td><td><span class="pill pg">Postgres</span> <span class="pill mongo">Mongo</span> <span class="pill redis">Redis</span></td><td>product-কে HTTP দিয়ে কল করে</td></tr>
+          <tr><td class="mono">notification</td><td>ইমেইল/অ্যালার্ট</td><td class="mono num">8092</td><td><span class="pill pg">Postgres</span></td><td>ইনবাউন্ড HTTP/JWT নেই — pure event consumer</td></tr>
+          <tr><td class="mono">delivery-tracking</td><td>ডেলিভারি স্ট্যাটাস</td><td class="mono num">8093</td><td><span class="pill mongo">Mongo</span></td><td>Postgres নেই; carrier webhook দিয়ে ডেটা আসে</td></tr>
+          <tr><td class="mono">admin</td><td>ব্যাক-অফিস অপারেশন</td><td class="mono num">8094</td><td><span class="pill pg">Postgres</span></td><td>client-credentials দিয়ে নিজেই identity-র একটা client</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:10px">
+      এজ + ফ্রন্টএন্ড: <span class="mono">gateway</span> → 8100 · <span class="mono">web</span> → 4210 ·
+      <span class="mono">admin-web</span> → 4300 · শেয়ার্ড ইনফ্রা: postgres 5433 · mongo 27018 · redis 6380 ·
+      rabbitmq 5673 (+15672 UI) · opensearch 9200
+    </p>
+  </section>
+
+  <!-- ================= ARCHITECTURE ================= -->
+  <section id="architecture">
+    <div class="section-head">
+      <h2>কে কার সাথে কথা বলে</h2>
+      <span class="tag">04 · DEPENDENCY MAP</span>
+    </div>
+    <p class="lede">
+      দুই ফ্রন্টএন্ড কখনো সরাসরি কোনো সার্ভিসে যায় না — সবকিছু <span class="mono">gateway</span> দিয়ে যায়।
+      এর বাইরে যে কয়েকটা সার্ভিস একে অপরকে সরাসরি কল করে, সেগুলো নিচে লেবেল করা আছে।
+    </p>
+    <div class="diagram-panel">
+      <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-monospace, monospace", "primaryTextColor": "#ffffff", "lineColor": "#8a9a94", "fontSize": "14px"}}}%%
+flowchart TB
+    web["web"] --> gateway["gateway"]
+    adminweb["admin-web"] --> gateway
+
+    gateway --> identity["identity"]
+    gateway --> user["user"]
+    gateway --> product["product"]
+    gateway --> category["category"]
+    gateway --> search["search"]
+    gateway --> inventory["inventory"]
+    gateway --> cart["cart"]
+    gateway --> order["order"]
+    gateway --> payment["payment"]
+    gateway --> offer["offer"]
+    gateway --> wishlist["wishlist"]
+    gateway --> deliverytracking["delivery-tracking"]
+
+    search -.->|"DB সরাসরি read"| product
+    cart -->|"gRPC: stock check"| inventory
+    order -->|"reserve stock"| inventory
+    order -->|"charge"| payment
+    wishlist -->|"product detail"| product
+
+    classDef fe fill:#445486,stroke:#2c3a63,color:#ffffff
+    classDef edge fill:#124b47,stroke:#0b3532,color:#ffffff
+    classDef svc fill:#1f6f6a,stroke:#124b47,color:#ffffff
+
+    class web,adminweb fe
+    class gateway edge
+    class identity,user,product,category,search,inventory,cart,order,payment,offer,wishlist,deliverytracking svc
+      </pre>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-swatch" style="background:#445486"></span> ফ্রন্টএন্ড (Angular)</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:#124b47"></span> এজ (gateway)</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:#1f6f6a"></span> ব্যাকএন্ড সার্ভিস</div>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:20px">
+      <b>একটা তীর আঁকা হয়নি ইচ্ছাকৃতভাবে:</b> প্রায় প্রতিটা সার্ভিসই <span class="mono">identity</span>-র
+      JWKS endpoint (<span class="mono">/.well-known/jwks.json</span>) চেক করে ইনকামিং টোকেন verify করে।
+      সবার থেকে identity-তে তীর আঁকলে ডায়াগ্রাম অপাঠ্য হয়ে যেত, তাই এখানে শুধু <span class="mono">category</span>-র
+      উদাহরণটা লেবেল করা আছে — বাকি সবাই একই প্যাটার্ন অনুসরণ করে।
+    </div>
+
+    <div class="callout" style="margin-top:12px">
+      <b>Async (RabbitMQ) সাইড:</b> ব্যাকএন্ডের সবগুলো সার্ভিসই RabbitMQ-এর সাথে কানেক্টেড (event পাঠাতে/শুনতে) —
+      কিন্তু <span class="mono">notification</span> আর <span class="mono">delivery-tracking</span>-এর টেবিলে
+      লক্ষ করলে দেখবে এদের কোনো ইনবাউন্ড HTTP/JWT কনফিগ নেই। মানে এই দুইটা সার্ভিস মূলত RabbitMQ event/webhook
+      থেকেই ডেটা পায়, সরাসরি কল থেকে না। ঠিক কোন সার্ভিস কোন event পাঠায় — সেই কন্ট্রাক্ট প্রতিটা সার্ভিসের
+      নিজের রিপোতে লেখা, <span class="mono">kart-devops</span> শুধু "কে RabbitMQ-তে কানেক্টেড" সেটা দেখায়।
+    </div>
+  </section>
+
+  <!-- ================= CONFIG ================= -->
+  <section id="config">
+    <div class="section-head">
+      <h2>কনফিগ কোথায় থাকে</h2>
+      <span class="tag">05 · CONFIG PRECEDENCE</span>
+    </div>
+    <p class="lede">
+      প্রতিটা সার্ভিসের কনফিগ ২ জায়গায় ভাগ হয়ে আছে — কেন এমন করা হয়েছে সেটাই নিচের ফ্লো-তে।
+    </p>
+    <div class="flow-row">
+      <div class="flow-box">
+        <span class="k">docker-compose.yml</span>
+        <span class="v">environment:</span>
+        <p>শুধু non-secret জিনিস — <span class="mono">ASPNETCORE_ENVIRONMENT</span>, <span class="mono">GlobalConfig__Path</span></p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box win">
+        <span class="k">globalconfig/&lt;name&gt;.json</span>
+        <span class="v">সবার শেষে লোড হয়</span>
+        <p>DB connection string, JWT key, RabbitMQ creds — সবসময় জেতে, environment: ভ্যালুকে ওভাররাইড করে</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">
+        <span class="k">app boot</span>
+        <span class="v">AddKartGlobalConfig()</span>
+        <p>ফাইল resolve না হলে অ্যাপ বুটই হয় না</p>
+      </div>
+    </div>
+    <ul class="plain" style="margin-top:20px">
+      <li><b>কেন আলাদা:</b> সব সার্ভিস <span class="mono">Kart.Shared.Configuration</span>-এর <span class="mono">AddKartGlobalConfig()</span> কল করে, যা এই ফাইলটাকে সব কনফিগের উপর দিয়ে লেয়ার করে — তাই একই নামের <span class="mono">environment:</span> ভ্যালু চুপচাপ হেরে যায়।</li>
+      <li><b>কে বানায়:</b> <span class="mono">scripts/generate-globalconfig.sh</span> — প্রথমবার একটা নতুন RSA JWT keypair + সব DB পাসওয়ার্ড জেনারেট করে।</li>
+      <li><b>গিট-এ আছে?</b> না — <span class="mono">compose/globalconfig/</span> gitignored, কারণ স্ক্রিপ্ট রি-রান করলেই আবার বানানো যায় (<span class="mono">--force</span> দিয়ে ফ্রেশ সিক্রেট)।</li>
+    </ul>
+  </section>
+
+  <!-- ================= WORKFLOW ================= -->
+  <section id="workflow">
+    <div class="section-head">
+      <h2>প্রথমবার চালানোর ধাপ</h2>
+      <span class="tag">06 · SEQUENCE</span>
+    </div>
+    <p class="lede">এটা সত্যিকারের ক্রম — একটার পর একটা, এই অর্ডারেই করতে হবে।</p>
+    <div class="steps">
+      <div class="step">
+        <span class="n">1</span>
+        <div><span class="cmd">scripts/dev-up.sh</span><p>globalconfig জেনারেট করে, তারপর <span class="mono">docker compose up --build -d</span> — সব কন্টেইনার বিল্ড+স্টার্ট।</p></div>
+      </div>
+      <div class="step">
+        <span class="n">2</span>
+        <div><span class="cmd">scripts/migrate-all.sh</span><p>প্রতিটা .NET সার্ভিসে <span class="mono">dotnet ef database update</span> চালায় — Postgres-এ টেবিল বানায়। অটো-মাইগ্রেট হয় না, ম্যানুয়ালি একবার লাগে (আর নতুন migration আসলে আবার)।</p></div>
+      </div>
+      <div class="step">
+        <span class="n">3</span>
+        <div><span class="cmd">http://localhost:4210 / :4300 / :8100</span><p>storefront, admin-web, gateway — ব্রাউজারে দেখো।</p></div>
+      </div>
+      <div class="step">
+        <span class="n">4</span>
+        <div><span class="cmd">scripts/dev-logs.sh [service]</span><p>সব সার্ভিস অথবা একটা নির্দিষ্ট সার্ভিসের লগ tail করে।</p></div>
+      </div>
+      <div class="step">
+        <span class="n">5</span>
+        <div><span class="cmd">scripts/dev-down.sh [-v]</span><p>স্ট্যাক বন্ধ; <span class="mono">-v</span> দিলে Postgres/Mongo/RabbitMQ/OpenSearch-এর ডেটাও মুছে যায় (পরের বার ফ্রেশ শুরু, migrate-all.sh আবার লাগবে)।</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= OBSERVABILITY ================= -->
+  <section id="observability">
+    <div class="section-head">
+      <h2>মনিটরিং স্ট্যাক</h2>
+      <span class="tag">07 · OBSERVABILITY</span>
+    </div>
+    <p class="lede">
+      মূল স্ট্যাকের সাথে অটোমেটিক চলে না — আলাদা কমান্ড লাগে:
+      <span class="mono">docker compose -f docker-compose.observability.yml up -d</span>
+    </p>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>কম্পোনেন্ট</th><th>পোর্ট</th><th>কাজ</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">otel-collector</td><td class="mono num">4317 / 4318</td><td>সব সার্ভিসের telemetry-র একমাত্র রিসিভার (gRPC/HTTP), তারপর Loki/Tempo/Prometheus-এ বিলি করে</td></tr>
+          <tr><td class="mono">loki</td><td class="mono num">3100</td><td>লগ স্টোরেজ</td></tr>
+          <tr><td class="mono">tempo</td><td class="mono num">3200</td><td>ডিস্ট্রিবিউটেড ট্রেস স্টোরেজ</td></tr>
+          <tr><td class="mono">prometheus</td><td class="mono num">9090</td><td>মেট্রিক স্টোরেজ</td></tr>
+          <tr><td class="mono">grafana</td><td class="mono num">3000</td><td>UI — <span class="mono">admin/admin</span>, log→trace→metric এক জায়গায়</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:10px">প্রতিটা সার্ভিস সরাসরি Loki/Tempo-তে না গিয়ে সবসময় <span class="mono">otel-collector</span>-এর কাছে পাঠায়।</p>
+  </section>
+
+  <!-- ================= CI ================= -->
+  <section id="ci">
+    <div class="section-head">
+      <h2>Reusable CI/CD workflows</h2>
+      <span class="tag">08 · GITHUB ACTIONS</span>
+    </div>
+    <p class="lede">এগুলো তোমার লোকাল মেশিনে চলে না — অন্য প্রতিটা <span class="mono">kart-*-service</span> রিপো তাদের নিজের CI থেকে <span class="mono">workflow_call</span> দিয়ে এগুলো কল করে।</p>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>ফাইল</th><th>কার জন্য</th><th>কাজ</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">dotnet-service-ci.yml</td><td>.NET সার্ভিস</td><td>format check, security scan, unit/integration/contract test</td></tr>
+          <tr><td class="mono">angular-app-ci.yml</td><td>kart-web / admin-web</td><td>npm ci, lint, headless-Chrome test, build</td></tr>
+          <tr><td class="mono">docker-build-push.yml</td><td>সবাই</td><td>Docker image বিল্ড, main branch-এ push হলে GHCR-এ পুশ (:latest + :sha)</td></tr>
+          <tr><td class="mono">contract-test-runner.yml</td><td>API provider সার্ভিস</td><td>oasdiff দিয়ে breaking API change চেক করে</td></tr>
+          <tr><td class="mono">openapi-client-codegen.yml</td><td>API provider সার্ভিস</td><td>OpenAPI spec থেকে Angular client অটো-জেনারেট + up-to-date চেক</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>kart-devops · local-dev compose + reusable CI, কোনো ব্যবসায়িক লজিক নয়</span>
+    <span>kind+Helm প্রোডাকশন-শেপড ডিপ্লয়মেন্ট → সেটা <span class="mono">kart-infra</span>-র কাজ</span>
+  </footer>
+
+</div>

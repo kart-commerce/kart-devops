@@ -1,0 +1,80 @@
+name: Contract Test Runner (Reusable)
+
+# Reusable consumer-driven contract verification, called from a provider service's own CI
+# (PLATFORM_BLUEPRINT.md S2.4/S2.5). Implements the "Contract Tests" row of the Quality Gate table
+# (S11): "Provider/consumer contract verified (Pact-style)". There is no real Pact Broker running yet
+# (docs/client/api-strategy.md S7 "Contract Validation") - standing up one is only worth the hosting
+# cost once enough real consumers exist to justify it. Until then, each registered consumer commits a
+# snapshot of the provider's OpenAPI contract that its generated client (api-strategy.md S1) was last
+# built against; this workflow uses `oasdiff` (github.com/oasdiff/oasdiff, real/maintained CLI, Docker
+# image `tufin/oasdiff`) to diff that snapshot ("base") against the provider's current api-contract.yaml
+# ("revision") and fails the gate if a breaking change is found - a schema-compatibility stand-in for a
+# full Pact broker's provider-verifies-every-consumer-pact model.
+#
+# TODO(future upgrade): once >= 2-3 real consumers exist, replace this with an actual hosted Pact
+# Broker (`pact-broker` + provider verification via `pact-jvm`/`pact-net`) for true interaction-level
+# (not just schema-level) consumer-driven contract testing.
+
+on:
+  workflow_call:
+    inputs:
+      provider-contract-path:
+        description: "Path to the provider's current api-contract.yaml, relative to the provider repo root."
+        required: true
+        type: string
+      consumers:
+        description: >
+          JSON array of registered consumers to verify against, e.g.
+          '[{"name":"kart-web","repo":"kart-commerce/kart-web","contract-snapshot-path":"contracts/kart-category-service.snapshot.yaml","ref":"main"}]'.
+          `contract-snapshot-path` is the last-known-good copy of this provider's contract that the
+          consumer's generated client (api-strategy.md S1) was built against; `ref` defaults to the
+          consumer repo's default branch if omitted.
+        required: true
+        type: string
+      fail-on:
+        description: "Minimum oasdiff severity that fails the gate: ERR, WARN, or INFO (default ERR)."
+        required: false
+        type: string
+        default: "ERR"
+    secrets:
+      consumer-checkout-token:
+        description: >
+          Token with read access to consumer repos, for cross-repo checkout of each consumer's contract
+          snapshot. Falls back to the calling workflow's default GITHUB_TOKEN, which only has access to
+          public repos or repos in the same repo (not other private repos in the org).
+        required: false
+
+jobs:
+  verify-consumer-contracts:
+    name: Verify contract - ${{ matrix.consumer.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer: ${{ fromJson(inputs.consumers) }}
+    steps:
+      - name: Checkout provider repo (revision contract)
+        uses: actions/checkout@v4
+        with:
+          path: provider
+
+      - name: Checkout consumer repo (base contract snapshot)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.consumer.repo }}
+          ref: ${{ matrix.consumer.ref || '' }}
+          token: ${{ secrets.consumer-checkout-token || github.token }}
+          path: consumer
+          sparse-checkout: |
+            ${{ matrix.consumer.contract-snapshot-path }}
+          sparse-checkout-cone-mode: false
+
+      - name: Schema-compatibility check (oasdiff breaking)
+        run: |
+          docker run --rm -t \
+            -v "${{ github.workspace }}:/specs:ro" \
+            -w /specs \
+            tufin/oasdiff breaking \
+            "consumer/${{ matrix.consumer.contract-snapshot-path }}" \
+            "provider/${{ inputs.provider-contract-path }}" \
+            --fail-on "${{ inputs.fail-on }}"

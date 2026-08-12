@@ -1,0 +1,104 @@
+{
+  "_comment": "Copy this file to global.json (gitignored, same directory) and fill in the two placeholders below. docker-compose.yml mounts global.json at every container's /app/globalconfig.json -- AddKartGlobalConfig(serviceName) refuses to let a service boot if that path doesn't resolve to a real file, so this copy step is not optional. Everything here is dev-only (this compose network is only reachable from your own machine) except the two Jwt/Mfa placeholders, which decrypt/verify data that outlives a container restart -- see the two _comment_* keys below for exactly what to put there.",
+
+  "Global": {
+    "LogRoot": "/var/log/kart",
+    "RabbitMq": { "HostName": "rabbitmq", "Port": 5672, "UserName": "kart", "Password": "kart123" },
+    "Identity": { "JwksUri": "http://identity:8080/.well-known/jwks.json" }
+  },
+  "Services": {
+    "kart-identity-service": {
+      "ConnectionStrings": {
+        "IdentityDb": "Host=postgres;Port=5432;Database=kart_identity;Username=postgres;Password=postgres",
+        "Redis": "redis:6379"
+      },
+      "_comment_Jwt": "PrivateKeyPem must be an RS256 private key, PEM-encoded with literal \\n line breaks (one JSON string, no real newlines). Generate a throwaway one with: openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/id.pem && sed ':a;N;$!ba;s/\\n/\\\\n/g' /tmp/id.pem -- then paste the result below. If you also run kart-identity-service bare-metal (dotnet run, via kart-internals/globalconfig.json), reuse that file's Jwt.SigningKey.PrivateKeyPem here instead of generating a new one, so tokens/enrollments stay valid across both.",
+      "Jwt": {
+        "SigningKey": {
+          "Kid": "identity-rs256-dev",
+          "PrivateKeyPem": "PASTE_YOUR_RS256_PRIVATE_KEY_PEM_HERE"
+        }
+      },
+      "_comment_Mfa": "KeyBase64 is a 32-byte AES-256 key, base64-encoded: openssl rand -base64 32. This is the ONLY key that can decrypt already-enrolled users' mfa_credentials rows (AES-256-GCM, no rotation/versioning -- see kart-identity-service's AesMfaSecretCipher) -- changing it after users have enrolled MFA locks them all out with an AuthenticationTagMismatchException on /v1/auth/mfa/verify. Same reuse advice as above: copy kart-internals/globalconfig.json's value here if you run bare-metal too.",
+      "Mfa": { "Encryption": { "KeyBase64": "PASTE_YOUR_MFA_AES_KEY_BASE64_HERE" } },
+      "ServicePrincipalSeeds": [
+        { "ClientId": "admin-service", "ClientSecret": "dev-admin-service-client-secret", "Role": "Admin" }
+      ]
+    },
+    "kart-user-service": {
+      "ConnectionStrings": { "UserDb": "Host=postgres;Port=5432;Database=kart_user;Username=postgres;Password=postgres" },
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017" },
+      "Jwt": { "JwksUri": "http://identity:8080/.well-known/jwks.json" }
+    },
+    "kart-product-service": {
+      "ConnectionStrings": {
+        "ProductDatabase": "Host=postgres;Port=5432;Database=kart_product;Username=postgres;Password=postgres",
+        "Redis": "redis:6379"
+      },
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017", "Database": "kart_product" }
+    },
+    "kart-category-service": {
+      "ConnectionStrings": {
+        "CategoryDatabase": "Host=postgres;Port=5432;Database=kart_category;Username=postgres;Password=postgres",
+        "Redis": "redis:6379"
+      }
+    },
+    "kart-search-service": {
+      "OpenSearch": { "Uri": "http://opensearch:9200" },
+      "ProductCatalogSnapshot": { "ConnectionString": "Host=postgres;Port=5432;Database=kart_product;Username=postgres;Password=postgres" }
+    },
+    "kart-inventory-service": {
+      "ConnectionStrings": {
+        "InventoryDatabase": "Host=postgres;Port=5432;Database=kart_inventory;Username=postgres;Password=postgres",
+        "Redis": "redis:6379"
+      }
+    },
+    "kart-cart-service": {
+      "ConnectionStrings": { "CartDb": "Host=postgres;Port=5432;Database=kart_cart;Username=postgres;Password=postgres" },
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017" },
+      "Redis": { "ConnectionString": "redis:6379" },
+      "Grpc": { "InventoryServiceAddress": "http://inventory:8080" },
+      "Jwt": { "Issuer": "kart-identity-service", "JwksUri": "http://identity:8080/.well-known/jwks.json" }
+    },
+    "kart-order-service": {
+      "ConnectionStrings": { "OrderDatabase": "Host=postgres;Port=5432;Database=kart_order;Username=postgres;Password=postgres" },
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017", "Database": "kart_order_read" },
+      "Inventory": { "BaseUrl": "http://inventory:8080" },
+      "Payment": { "BaseUrl": "http://payment:8080" }
+    },
+    "kart-payment-service": {
+      "ConnectionStrings": { "PaymentDatabase": "Host=postgres;Port=5432;Database=kart_payment;Username=postgres;Password=postgres" },
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017", "Database": "kart_payment_read" },
+      "Gateway": { "SigningSecrets": { "simulated": "dev-simulated-gateway-signing-secret" } }
+    },
+    "kart-offer-service": {
+      "ConnectionStrings": { "OfferDatabase": "Host=postgres;Port=5432;Database=kart_offer;Username=postgres;Password=postgres" },
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017", "Database": "kart_offer_read" }
+    },
+    "kart-wishlist-service": {
+      "ConnectionStrings": { "WishlistDb": "Host=postgres;Port=5432;Database=kart_wishlist;Username=postgres;Password=postgres" },
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017" },
+      "Redis": { "ConnectionString": "redis:6379" },
+      "ProductService": { "BaseUrl": "http://product:8080" },
+      "Jwt": { "Issuer": "kart-identity-service", "JwksUri": "http://identity:8080/.well-known/jwks.json" }
+    },
+    "kart-notification-service": {
+      "ConnectionStrings": { "NotificationDb": "Host=postgres;Port=5432;Database=kart_notification;Username=postgres;Password=postgres" }
+    },
+    "kart-delivery-tracking-service": {
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017" },
+      "Carriers": { "demo-carrier": { "WebhookSharedSecret": "dev-demo-carrier-webhook-secret" } }
+    },
+    "kart-admin-service": {
+      "ConnectionStrings": { "AdminDatabase": "Host=postgres;Port=5432;Database=kart_admin;Username=postgres;Password=postgres" },
+      "IdentityClientCredentials": { "ClientId": "admin-service", "ClientSecret": "dev-admin-service-client-secret", "Scope": "admin" },
+      "DownstreamServices": {
+        "Product": { "BaseUrl": "http://product:8080" },
+        "Category": { "BaseUrl": "http://category:8080" },
+        "Offer": { "BaseUrl": "http://offer:8080" },
+        "Identity": { "BaseUrl": "http://identity:8080" },
+        "Inventory": { "BaseUrl": "http://inventory:8080" }
+      }
+    }
+  }
+}

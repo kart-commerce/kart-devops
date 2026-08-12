@@ -1,0 +1,36 @@
+# Minimal single-binary Tempo config for local development (agent-reusables/docs/standards/
+# observability-standards.md: "The full stack ... runs locally via a single shared docker-compose
+# profile ... owned once, centrally"). Not tuned for production - kart-infra owns the real
+# Helm-deployed Tempo config for staging/production.
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        # Explicit endpoints are required - an empty `grpc:`/`http:` block does not fall back to
+        # a default bind address in this Tempo version, so the OTLP receiver silently never
+        # starts (confirmed: Tempo's own startup log lists only http=3200/grpc=9095, its internal
+        # server ports - never 4317/4318) and the Collector's otlp/tempo exporter spins forever on
+        # "connection refused" instead. This is why no trace ever reached Tempo before this fix.
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal

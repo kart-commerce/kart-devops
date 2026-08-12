@@ -41,20 +41,35 @@ Then:
 | RabbitMQ management UI | http://localhost:15672 (`kart` / `kart123`) |
 | Shared observability (Grafana etc.) | run `docker compose -f docker-compose.observability.yml up -d` alongside — see below |
 
-### Why a generated shared `global.json`, not plain `environment:` vars
+### Why one shared `global.json`, not plain `environment:` vars
 
 Every service calls `Kart.Shared.Configuration`'s `AddKartGlobalConfig(serviceName)`, which layers
 a `GlobalConfig:Path` JSON file on top of whatever config exists **last** — so it silently wins
 over a same-named `environment:` value, and the app refuses to boot if that path doesn't resolve
-at all. Rather than fight that precedence, `scripts/generate-globalconfig.sh` writes **one**
-`compose/globalconfig/global.json` (throwaway local-dev secrets — a fresh JWT signing keypair,
-shared dev DB/broker credentials, cross-service URLs already pointed at this compose network's
-service names), shaped as a `Global` section (platform-wide defaults every service inherits) plus
-one `Services:<name>` block per service (that service's own secrets). Every app container mounts
-that *same* file at `/app/globalconfig.json` — `AddKartGlobalConfig` picks out only the
-`Global` + `Services:<serviceName>` keys that apply to it, using the literal service name each
-container's own `Program.cs` already passes in. Gitignored; re-run the script (`--force` to
-regenerate) any time you want fresh secrets.
+at all. This stack points every container's `GlobalConfig:Path` at the same file (throwaway
+local-dev secrets — a JWT signing keypair, shared dev DB/broker credentials, cross-service URLs
+already pointed at this compose network's service names), shaped as a `Global` section
+(platform-wide defaults every service inherits) plus one `Services:<name>` block per service (that
+service's own secrets). `AddKartGlobalConfig` picks out only the `Global` + `Services:<serviceName>`
+keys that apply to a given container, using the literal service name each container's own
+`Program.cs` already passes in.
+
+**Where that file actually lives is never written down in this repo.** Every service's volume
+mount in `docker-compose.yml` reads `${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro` — a variable,
+not a literal path — sourced from `globalconfig.local.env` (gitignored, per-machine, one line:
+`GLOBALCONFIG_PATH=/wherever/yours/is`; see
+[`globalconfig.local.env.example`](globalconfig.local.env.example)). `scripts/dev-up.sh` sources it
+the same way it sources `ports.env` and fails fast with an actionable message if it's missing or
+points at nothing, rather than letting every container crash-loop on a confusing
+`GlobalConfig:Path` error. The file it should point at doesn't exist until you create one — copy
+[`compose/globalconfig/global.json.example`](compose/globalconfig/global.json.example) *anywhere
+you like* and fill in its two `Jwt`/`Mfa` placeholders (that file's own comments explain how, and
+why they matter more than everything else in it — they're the only two values here that
+decrypt/verify data that outlives a container restart) — then point `GLOBALCONFIG_PATH` at wherever
+you put it. If you also run `kart-identity-service` bare-metal against
+`kart-internals/globalconfig.json`, reuse that file's `Jwt.SigningKey.PrivateKeyPem` and
+`Mfa.Encryption.KeyBase64` values here instead of generating fresh ones, so tokens and MFA
+enrollments stay valid across both.
 
 Each container also mounts `compose/globalconfig/logs/<service>/` at `/var/log/kart/<service>` —
 `global.json`'s `Global:LogRoot` is `/var/log/kart`, so `Kart.Shared.Configuration` computes the
@@ -66,11 +81,12 @@ same file the container's Serilog file sink writes.
 ### Ports
 
 **[`ports.env`](ports.env) is the single source of truth** for every host port in the table
-below -- not a secret (unlike `compose/globalconfig/`), committed to git, read directly by this
-file's own `${..._PORT}` interpolation. `scripts/dev-up.sh`/`dev-down.sh`/`dev-logs.sh` already
-pass `docker compose --env-file ports.env`; run that flag yourself if you're calling `docker
-compose` directly instead of through those scripts. Change a port in exactly one place --
-`ports.env` -- then update its non-Docker consumers listed below to match.
+below -- not a secret (unlike `compose/globalconfig/`/`globalconfig.local.env`), committed to
+git, read directly by this file's own `${..._PORT}` interpolation. `scripts/dev-up.sh`/
+`dev-down.sh`/`dev-logs.sh` already pass `docker compose --env-file ports.env --env-file
+globalconfig.local.env`; run both flags yourself if you're calling `docker compose` directly
+instead of through those scripts. Change a port in exactly one place -- `ports.env` -- then
+update its non-Docker consumers listed below to match.
 
 | Service | Host port |
 |---|---|

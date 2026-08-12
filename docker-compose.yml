@@ -11,14 +11,19 @@
 # -- add them here once they're actually scaffolded. kart-admin-service was scaffolded and
 # added below.
 #
-# Usage: scripts/dev-up.sh (generates compose/globalconfig/ on first run, then `docker compose up`)
+# Usage: scripts/dev-up.sh (checks globalconfig.local.env resolves to a real file, then
+# `docker compose up`)
 #
 # Every host port below is `${..._PORT}` interpolated from ports.env -- the single source of
 # truth README.md's Ports table and every other file that needs one of these values (each
 # service's own launchSettings.json/appsettings.Development.json/docker-compose.yml,
 # kart-web's/kart-admin-web's .env.example/proxy.conf.json/app-config.ts) is documented as
-# mirroring. scripts/dev-up.sh/dev-down.sh/dev-logs.sh already pass `--env-file ports.env`;
-# run `docker compose --env-file ports.env <command>` directly if you're not using those scripts.
+# mirroring. Every `${GLOBALCONFIG_PATH}` volume entry below comes from globalconfig.local.env
+# (gitignored, per-machine -- see globalconfig.local.env.example) instead, so this file never
+# records where any developer's real GlobalConfig JSON actually lives. scripts/dev-up.sh/
+# dev-down.sh/dev-logs.sh already pass both as `--env-file`; run `docker compose --env-file
+# ports.env --env-file globalconfig.local.env <command>` directly if you're not using those
+# scripts.
 
 services:
   # ---------------------------------------------------------------------------
@@ -113,8 +118,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/identity:/var/log/kart/kart-identity-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/identity:/var/log/kart/kart-identity-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -131,8 +136,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/category:/var/log/kart/kart-category-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/category:/var/log/kart/kart-category-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -151,8 +156,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/user:/var/log/kart/kart-user-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/user:/var/log/kart/kart-user-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -170,8 +175,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/product:/var/log/kart/kart-product-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/product:/var/log/kart/kart-product-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -191,8 +196,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/search:/var/log/kart/kart-search-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/search:/var/log/kart/kart-search-service
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -210,8 +215,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/inventory:/var/log/kart/kart-inventory-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/inventory:/var/log/kart/kart-inventory-service
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -230,8 +235,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/cart:/var/log/kart/kart-cart-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/cart:/var/log/kart/kart-cart-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -251,8 +256,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/order:/var/log/kart/kart-order-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/order:/var/log/kart/kart-order-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -271,8 +276,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/payment:/var/log/kart/kart-payment-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/payment:/var/log/kart/kart-payment-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -290,8 +295,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/offer:/var/log/kart/kart-offer-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/offer:/var/log/kart/kart-offer-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -310,8 +315,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/wishlist:/var/log/kart/kart-wishlist-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/wishlist:/var/log/kart/kart-wishlist-service
     depends_on:
       postgres: { condition: service_healthy }
       mongo: { condition: service_healthy }
@@ -331,8 +336,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/notification:/var/log/kart/kart-notification-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/notification:/var/log/kart/kart-notification-service
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -348,8 +353,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/delivery-tracking:/var/log/kart/kart-delivery-tracking-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/delivery-tracking:/var/log/kart/kart-delivery-tracking-service
     depends_on:
       mongo: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -365,8 +370,8 @@ services:
       GlobalConfig__Path: /app/globalconfig.json
       Observability__Otlp__Endpoint: http://otel-collector:4317
     volumes:
-      - ./compose/globalconfig/global.json:/app/globalconfig.json:ro
-      - ./compose/globalconfig/logs/admin:/var/log/kart/kart-admin-service
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/admin:/var/log/kart/kart-admin-service
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -387,7 +392,7 @@ services:
       - "${GATEWAY_PORT}:8080" # 8080 is commonly already taken by something else on a dev box
     environment:
       # Every other container's ASPNETCORE_ENVIRONMENT=Development is masked by its own mounted
-      # GlobalConfig file (layered in last - see generate-globalconfig.sh's header comment)
+      # GlobalConfig file (layered in last - see compose/globalconfig/global.json.example's header comment)
       # overriding appsettings.Development.json's bare-metal `localhost` addresses back to Docker
       # DNS names. The gateway has no GlobalConfig file at all (it holds no secrets), so
       # "Development" here would make it load appsettings.Development.json's Identity:JwksUri AND

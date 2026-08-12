@@ -142,5 +142,14 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# Generated per-machine dev secrets (scripts/generate-globalconfig.sh regenerates these)
-compose/globalconfig/
+# Per-machine dev secrets. compose/globalconfig/global.json.example documents the JSON shape a
+# Docker GlobalConfig file needs -- copy it to global.json (or anywhere else on disk) and fill in
+# its two placeholders; everything else under this directory stays ignored (real secrets file +
+# the log dirs Docker bind-mounts create).
+compose/globalconfig/*
+!compose/globalconfig/global.json.example
+
+# Points docker-compose.yml's ${GLOBALCONFIG_PATH} at wherever your real GlobalConfig JSON file
+# actually lives (see globalconfig.local.env.example) -- deliberately not committed, so this repo
+# never records that location.
+globalconfig.local.env

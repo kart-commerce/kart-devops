@@ -2,8 +2,8 @@
 # Brings up the full local platform stack: 13 real backend services + kart-api-gateway +
 # kart-web + kart-admin-web + shared Postgres/Mongo/Redis/RabbitMQ/OpenSearch.
 #
-# First run only: generates compose/globalconfig/ (throwaway local secrets, gitignored) and
-# reminds you to run migrate-all.sh once Postgres is up.
+# First run only: requires globalconfig.local.env to point GLOBALCONFIG_PATH at a real file (see
+# the check below) and reminds you to run migrate-all.sh once Postgres is up.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -14,7 +14,27 @@ set -a
 source ports.env
 set +a
 
-./scripts/generate-globalconfig.sh
+# globalconfig.local.env is gitignored and per-machine (see .gitignore's comment) -- it sets
+# GLOBALCONFIG_PATH, which docker-compose.yml's `${GLOBALCONFIG_PATH}` volume entries mount at
+# every container's /app/globalconfig.json. AddKartGlobalConfig(serviceName) refuses to let a
+# service boot without that file, so fail fast here with an actionable message instead of
+# letting every container crash-loop. Sourced with `set -a` for the same reason ports.env is --
+# so GLOBALCONFIG_PATH is a real exported shell var, resolved by `docker compose` regardless of
+# the separate `--env-file ports.env` flag below (shell env always wins over --env-file).
+if [[ ! -f globalconfig.local.env ]]; then
+  echo "globalconfig.local.env is missing -- copy globalconfig.local.env.example to" >&2
+  echo "globalconfig.local.env and point GLOBALCONFIG_PATH at your real GlobalConfig JSON file" >&2
+  echo "(compose/globalconfig/global.json.example documents the shape it needs)." >&2
+  exit 1
+fi
+set -a
+source globalconfig.local.env
+set +a
+if [[ -z "${GLOBALCONFIG_PATH:-}" || ! -f "$GLOBALCONFIG_PATH" ]]; then
+  echo "GLOBALCONFIG_PATH ('${GLOBALCONFIG_PATH:-}') in globalconfig.local.env isn't set or" >&2
+  echo "doesn't point at a real file -- fix it there before continuing." >&2
+  exit 1
+fi
 
 # kart-commerce/ (the parent of every kart-*-service repo) isn't itself a git repo, so this
 # can't be committed anywhere -- several services build with that directory as their Docker
@@ -39,7 +59,7 @@ EOF
 fi
 
 echo "Building and starting the stack (this can take a while the first time)..."
-docker compose --env-file ports.env up --build -d
+docker compose --env-file ports.env --env-file globalconfig.local.env up --build -d
 
 cat <<EOF
 

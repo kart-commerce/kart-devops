@@ -1,0 +1,478 @@
+# Full local-dev platform stack: every real (non-stub) kart-*-service, the api-gateway, both
+# Angular apps, and the shared infra they need -- one shared Postgres/Mongo/Redis/RabbitMQ/
+# OpenSearch instead of each service's own per-repo compose file's separate containers (those
+# collide on host ports if run side-by-side; see scripts/README or kart-platform's own
+# investigation for the full inventory). This is the FAST inner dev loop -- see
+# kart-infra/docs/adr/0001-local-cluster-tool-kind.md for the separate, heavier kind+Helm path
+# that actually validates a real Kubernetes deployment. Both are intentional; they serve
+# different jobs (README.md explains the split).
+#
+# Excludes 4 stub services with no code yet (review, shipping, recommendation, analytics)
+# -- add them here once they're actually scaffolded. kart-admin-service was scaffolded and
+# added below.
+#
+# Usage: scripts/dev-up.sh (checks globalconfig.local.env resolves to a real file, then
+# `docker compose up`)
+#
+# Every host port below is `${..._PORT}` interpolated from ports.env -- the single source of
+# truth README.md's Ports table and every other file that needs one of these values (each
+# service's own launchSettings.json/appsettings.Development.json/docker-compose.yml,
+# kart-web's/kart-admin-web's .env.example/proxy.conf.json/app-config.ts) is documented as
+# mirroring. Every `${GLOBALCONFIG_PATH}` volume entry below comes from globalconfig.local.env
+# (gitignored, per-machine -- see globalconfig.local.env.example) instead, so this file never
+# records where any developer's real GlobalConfig JSON actually lives. scripts/dev-up.sh/
+# dev-down.sh/dev-logs.sh already pass both as `--env-file`; run `docker compose --env-file
+# ports.env --env-file globalconfig.local.env <command>` directly if you're not using those
+# scripts.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Shared infrastructure
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: kart-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${POSTGRES_PORT}:5432" # 5432 is commonly already taken by a local Postgres install
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./compose/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: kart-mongo
+    ports:
+      - "${MONGO_PORT}:27017" # 27017 is commonly already taken by a local Mongo install
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: kart-redis
+    ports:
+      - "${REDIS_PORT}:6379" # 6379 is commonly already taken by a local Redis install
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: kart-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: kart
+      RABBITMQ_DEFAULT_PASS: kart123
+    ports:
+      - "${RABBITMQ_AMQP_PORT}:5672" # AMQP - 5672 is commonly already taken
+      - "${RABBITMQ_UI_PORT}:15672"  # management UI - http://localhost:15672 (kart/kart123)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: kart-opensearch
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "${OPENSEARCH_PORT}:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/9200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  # ---------------------------------------------------------------------------
+  # Backend services (13 real, scaffolded services -- 5 stubs intentionally excluded)
+  # ---------------------------------------------------------------------------
+  identity:
+    build:
+      context: ../kart-identity-service
+    container_name: kart-identity
+    ports:
+      - "${IDENTITY_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/identity:/var/log/kart/kart-identity-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  category:
+    build:
+      context: ../kart-category-service
+    container_name: kart-category
+    ports:
+      - "${CATEGORY_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/category:/var/log/kart/kart-category-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  user:
+    build:
+      context: ..
+      dockerfile: kart-user-service/Dockerfile
+    container_name: kart-user
+    ports:
+      - "${USER_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/user:/var/log/kart/kart-user-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  product:
+    build:
+      context: ../kart-product-service
+    container_name: kart-product
+    ports:
+      - "${PRODUCT_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/product:/var/log/kart/kart-product-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  search:
+    build:
+      context: ..
+      dockerfile: kart-search-service/Dockerfile
+    container_name: kart-search
+    ports:
+      - "${SEARCH_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/search:/var/log/kart/kart-search-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+      product: { condition: service_started }
+
+  inventory:
+    build:
+      context: ../kart-inventory-service
+    container_name: kart-inventory
+    ports:
+      - "${INVENTORY_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/inventory:/var/log/kart/kart-inventory-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  cart:
+    build:
+      context: ..
+      dockerfile: kart-cart-service/Dockerfile
+    container_name: kart-cart
+    ports:
+      - "${CART_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/cart:/var/log/kart/kart-cart-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      inventory: { condition: service_started }
+      identity: { condition: service_started }
+
+  order:
+    build:
+      context: ../kart-order-service
+    container_name: kart-order
+    ports:
+      - "${ORDER_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/order:/var/log/kart/kart-order-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      inventory: { condition: service_started }
+      identity: { condition: service_started }
+
+  payment:
+    build:
+      context: ../kart-payment-service
+    container_name: kart-payment
+    ports:
+      - "${PAYMENT_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/payment:/var/log/kart/kart-payment-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  offer:
+    build:
+      context: ../kart-offer-service
+    container_name: kart-offer
+    ports:
+      - "${OFFER_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/offer:/var/log/kart/kart-offer-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+
+  wishlist:
+    build:
+      context: ..
+      dockerfile: kart-wishlist-service/Dockerfile
+    container_name: kart-wishlist
+    ports:
+      - "${WISHLIST_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/wishlist:/var/log/kart/kart-wishlist-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      product: { condition: service_started }
+      identity: { condition: service_started }
+
+  notification:
+    build:
+      context: ../kart-notification-service
+    container_name: kart-notification
+    ports:
+      - "${NOTIFICATION_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/notification:/var/log/kart/kart-notification-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  delivery-tracking:
+    build:
+      context: ../kart-delivery-tracking-service
+    container_name: kart-delivery-tracking
+    ports:
+      - "${DELIVERY_TRACKING_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/delivery-tracking:/var/log/kart/kart-delivery-tracking-service
+    depends_on:
+      mongo: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  admin:
+    build:
+      context: ../kart-admin-service
+    container_name: kart-admin
+    ports:
+      - "${ADMIN_PORT}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    volumes:
+      - ${GLOBALCONFIG_PATH}:/app/globalconfig.json:ro
+      - ../kart-internals/logs/admin:/var/log/kart/kart-admin-service
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      identity: { condition: service_started }
+      product: { condition: service_started }
+      category: { condition: service_started }
+      offer: { condition: service_started }
+      inventory: { condition: service_started }
+
+  # ---------------------------------------------------------------------------
+  # Edge
+  # ---------------------------------------------------------------------------
+  gateway:
+    build:
+      context: ../kart-api-gateway
+    container_name: kart-gateway
+    ports:
+      - "${GATEWAY_PORT}:8080" # 8080 is commonly already taken by something else on a dev box
+    environment:
+      # Every other container's ASPNETCORE_ENVIRONMENT=Development is masked by its own mounted
+      # GlobalConfig file (layered in last - see compose/globalconfig/global.json.example's header comment)
+      # overriding appsettings.Development.json's bare-metal `localhost` addresses back to Docker
+      # DNS names. The gateway has no GlobalConfig file at all (it holds no secrets), so
+      # "Development" here would make it load appsettings.Development.json's Identity:JwksUri AND
+      # every ReverseProxy Cluster destination as `localhost:<port>` - unreachable from inside its
+      # own container, failing every request (auth first, then every proxied call). Program.cs
+      # has no IsDevelopment()-gated behavior (no Swagger here), so this name only controls which
+      # appsettings.*.json layers in - anything other than "Development" leaves appsettings.json's
+      # own correct `http://<service>:8080/` defaults in effect.
+      ASPNETCORE_ENVIRONMENT: Docker
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+    depends_on:
+      identity: { condition: service_started }
+      category: { condition: service_started }
+      user: { condition: service_started }
+      product: { condition: service_started }
+      search: { condition: service_started }
+      inventory: { condition: service_started }
+      cart: { condition: service_started }
+      order: { condition: service_started }
+      payment: { condition: service_started }
+      offer: { condition: service_started }
+      wishlist: { condition: service_started }
+      delivery-tracking: { condition: service_started }
+      admin: { condition: service_started }
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ../kart-web
+    container_name: kart-web
+    ports:
+      - "${WEB_PORT}:4000" # 4200 is commonly already taken by a local `ng serve`
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      GATEWAY_BASE_URL: http://gateway:8080
+      IDENTITY_SERVICE_BASE_URL: http://identity:8080
+      REDIS_URL: redis://redis:6379
+      # @angular/ssr's built-in SSRF guard rejects a Host header it doesn't recognize -- it
+      # checks the hostname only (port stripped), so this is "localhost", not "localhost:4210".
+      NG_ALLOWED_HOSTS: "localhost"
+    depends_on:
+      gateway: { condition: service_started }
+      redis: { condition: service_healthy }
+
+  admin-web:
+    build:
+      context: ../kart-admin-web
+    container_name: kart-admin-web
+    ports:
+      - "${ADMIN_WEB_PORT}:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      GATEWAY_BASE_URL: http://gateway:8080
+      IDENTITY_SERVICE_BASE_URL: http://identity:8080
+      REDIS_URL: redis://redis:6379
+      ADMIN_SERVICE_BASE_URL: http://admin:8080
+      # ANALYTICS_SERVICE_BASE_URL intentionally left unset -- kart-analytics-service is still
+      # an unscaffolded stub (no code yet). admin-web's own BFF already turns an unreachable
+      # upstream into a clean 502 "upstream_unavailable" response, so its analytics panel will
+      # correctly show as unavailable until that service is actually built.
+      # Without this, logger.ts (kart-admin-web/src/server/logger.ts) falls back to
+      # ./logs/bff-server.log relative to /app -- a path that only exists inside the
+      # container's own ephemeral filesystem, so it's invisible on the host and lost on
+      # every restart. Point it at the same kart-internals/kart-admin-web/bff-server.log
+      # file local (non-docker) `npm run serve:bff` already writes to (.env.example), via
+      # the bind mount below, so both places land in one file regardless of how the BFF runs.
+      LOG_FILE_PATH: /var/log/kart/admin-web/bff-server.log
+    volumes:
+      - ../kart-internals/kart-admin-web:/var/log/kart/admin-web
+    depends_on:
+      gateway: { condition: service_started }
+      redis: { condition: service_healthy }
+      admin: { condition: service_started }
+
+volumes:
+  postgres-data:
+  mongo-data:
+  rabbitmq-data:
+  opensearch-data:

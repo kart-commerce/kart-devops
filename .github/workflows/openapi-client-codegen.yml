@@ -1,0 +1,80 @@
+name: OpenAPI Client Codegen Check (Reusable)
+
+# Reusable workflow implementing docs/client/api-strategy.md S1: "Regeneration is triggered by a
+# kart-devops reusable workflow step watching each service's api-contract.yaml for changes" - every
+# feature-code call site goes through a generated, typed Angular HttpClient (core/http/generated/<service>/),
+# never a hand-written HTTP call. Runs `openapi-generator-cli` (Docker image `openapitools/openapi-generator-cli`,
+# chosen over the npm wrapper package because the npm package just downloads and shells out to the same
+# Java JAR at install time - the Docker image is a pinned, ready-to-run artifact with no extra JDK/Java
+# setup step, which is more reliable in CI) against the given `api-contract.yaml`, emitting a typed
+# `typescript-angular` client into the given output directory.
+#
+# This is also the "generated client is up to date" gate (api-strategy.md S1's "a regenerated client
+# that doesn't compile against existing call sites fails CI immediately"): after generating, the workflow
+# diffs the output directory against what's committed - any uncommitted diff (a contract changed but the
+# checked-in generated client wasn't regenerated and committed) fails the build. PLATFORM_BLUEPRINT.md
+# S11 Quality Gate table: "Contract Compatibility" (no undeclared breaking change reaching feature code
+# uncaught) and "Documentation Updated" (generated artifact kept in lockstep with its source contract).
+
+on:
+  workflow_call:
+    inputs:
+      contract-path:
+        description: "Path to the service's api-contract.yaml, relative to the repo root."
+        required: true
+        type: string
+      output-dir:
+        description: "Directory the generated Angular HttpClient client is emitted into, relative to the repo root (e.g. core/http/generated/category-service)."
+        required: true
+        type: string
+      npm-name:
+        description: "npmName generator property for the generated client package (e.g. @kart/category-service-client)."
+        required: false
+        type: string
+        default: ""
+      generator-image-tag:
+        description: "Pinned tag of the openapitools/openapi-generator-cli Docker image (default v7.9.0)."
+        required: false
+        type: string
+        default: "v7.9.0"
+      fail-on-diff:
+        description: "Fail the build if regenerating the client produces an uncommitted diff (default true). Set false for a pure 'regenerate' run with no drift check."
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  codegen-check:
+    name: Regenerate & verify client is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Angular HttpClient client from contract
+        run: |
+          mkdir -p "${{ inputs.output-dir }}"
+          docker run --rm \
+            -v "${{ github.workspace }}:/local" \
+            "openapitools/openapi-generator-cli:${{ inputs.generator-image-tag }}" generate \
+            -i "/local/${{ inputs.contract-path }}" \
+            -g typescript-angular \
+            -o "/local/${{ inputs.output-dir }}" \
+            ${{ inputs.npm-name != '' && format('--additional-properties=npmName={0}', inputs.npm-name) || '' }}
+
+      - name: Check generated client is up to date
+        if: ${{ inputs.fail-on-diff }}
+        run: |
+          if ! git diff --quiet -- "${{ inputs.output-dir }}" || [ -n "$(git status --porcelain -- "${{ inputs.output-dir }}")" ]; then
+            echo "::error::Regenerating the Angular client from ${{ inputs.contract-path }} produced changes that aren't committed in ${{ inputs.output-dir }}. Run this workflow's generation step locally and commit the result."
+            git status --porcelain -- "${{ inputs.output-dir }}"
+            git diff -- "${{ inputs.output-dir }}"
+            exit 1
+          fi
+
+      - name: Upload generated client (for inspection on failure or PR preview)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-client
+          path: ${{ inputs.output-dir }}

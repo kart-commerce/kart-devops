@@ -1,0 +1,17 @@
+# Minimal Prometheus scrape config for local development (agent-reusables/docs/standards/
+# observability-standards.md). Scrapes itself plus the OTel Collector's Prometheus-format
+# exporter, which is what carries each service's OTLP-exported metrics in this local stack.
+# Real per-service `/metrics` scrape targets are a project-specific addition on top of this file
+# once services actually exist and register themselves (e.g. via file_sd or a per-repo override).
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]

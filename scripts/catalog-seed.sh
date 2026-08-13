@@ -126,22 +126,18 @@ for i in $(seq 0 $((PRODUCT_COUNT_TOTAL - 1))); do
 
     attributes="$(jq -nc \
       --arg color "$color" --arg size "$size" \
-      --arg imageUrl "$imageUrl" \
-      --arg img1 "$(catalog::image_url "$variantSku" 1)" \
-      --arg img2 "$(catalog::image_url "$variantSku" 2)" \
       '{
         size: (if $size == "" then null else $size end),
-        color: (if $color == "" then null else $color end),
-        extendedAttributes: { imageUrl: $imageUrl, images: [$img1, $img2] }
+        color: (if $color == "" then null else $color end)
       }')"
 
     if [[ "$v" -eq 0 ]]; then
       body="$(jq -nc \
         --arg name "$name" --arg description "$description" --arg categoryId "$categoryId" \
         --arg brand "$brand" --arg sku "$variantSku" --argjson price "$price" --arg currency "$currency" \
-        --argjson attributes "$attributes" \
+        --argjson attributes "$attributes" --arg imageUrl "$imageUrl" \
         '{name: $name, description: $description, categoryId: $categoryId, brand: $brand, sku: $sku,
-          price: {amount: $price, currency: $currency}, attributes: $attributes}')"
+          price: {amount: $price, currency: $currency}, attributes: $attributes, imageUrl: $imageUrl}')"
       resp="$(catalog::request POST "$PRODUCT_URL/v1/product-groups" "$body")"
       catalog::split_response "$resp"
 

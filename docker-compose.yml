@@ -432,6 +432,10 @@ services:
       NODE_ENV: production
       GATEWAY_BASE_URL: http://gateway:8080
       IDENTITY_SERVICE_BASE_URL: http://identity:8080
+      # Browser-reachable — used only for redirect Location headers (e.g. social login), never
+      # for this process's own server-to-server calls. Docker-internal hostnames like
+      # IDENTITY_SERVICE_BASE_URL above are unreachable from the end user's own browser.
+      IDENTITY_SERVICE_PUBLIC_BASE_URL: http://localhost:${IDENTITY_PORT}
       REDIS_URL: redis://redis:6379
       # @angular/ssr's built-in SSRF guard rejects a Host header it doesn't recognize -- it
       # checks the hostname only (port stripped), so this is "localhost", not "localhost:4210".

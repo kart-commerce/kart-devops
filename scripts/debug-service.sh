@@ -83,7 +83,7 @@ LOCAL_PORT="${LOCAL_PORT:-$DEFAULT_PORT}"
 if $RESTORE; then
   echo "Removing passthrough for '$SERVICE' and restoring its real container..."
   docker rm -f "$PASSTHROUGH_NAME" >/dev/null 2>&1 || true
-  docker compose --env-file ports.env up -d "$SERVICE"
+  docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env up -d "$SERVICE"
   echo "Done -- '$SERVICE' is back on Docker."
   exit 0
 fi
@@ -103,8 +103,8 @@ if docker ps --format '{{.Names}}' | grep -qx "$PASSTHROUGH_NAME"; then
 fi
 
 echo "Stopping '$SERVICE's Docker container..."
-docker compose --env-file ports.env stop "$SERVICE" >/dev/null 2>&1 || true
-docker compose --env-file ports.env rm -f "$SERVICE" >/dev/null 2>&1 || true
+docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env stop "$SERVICE" >/dev/null 2>&1 || true
+docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env rm -f "$SERVICE" >/dev/null 2>&1 || true
 
 echo "Starting passthrough: Docker DNS name '$SERVICE' -> host.docker.internal:$LOCAL_PORT ..."
 docker run -d --name "$PASSTHROUGH_NAME" \

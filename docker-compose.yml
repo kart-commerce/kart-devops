@@ -20,10 +20,12 @@
 # kart-web's/kart-admin-web's .env.example/proxy.conf.json/app-config.ts) is documented as
 # mirroring. Every `${GLOBALCONFIG_PATH}` volume entry below comes from globalconfig.local.env
 # (gitignored, per-machine -- see globalconfig.local.env.example) instead, so this file never
-# records where any developer's real GlobalConfig JSON actually lives. scripts/dev-up.sh/
-# dev-down.sh/dev-logs.sh already pass both as `--env-file`; run `docker compose --env-file
-# ports.env --env-file globalconfig.local.env <command>` directly if you're not using those
-# scripts.
+# records where any developer's real GlobalConfig JSON actually lives. The shared postgres/
+# rabbitmq containers' own bootstrap credentials (`${POSTGRES_USER}` etc.) come the same way
+# from infra.env (gitignored -- see infra.env.example) instead of being written here in plain
+# text. scripts/dev-up.sh/dev-down.sh/dev-logs.sh already pass all three as `--env-file`; run
+# `docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env
+# <command>` directly if you're not using those scripts.
 
 services:
   # ---------------------------------------------------------------------------
@@ -33,8 +35,8 @@ services:
     image: postgres:16-alpine
     container_name: kart-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT}:5432" # 5432 is commonly already taken by a local Postgres install
     volumes:
@@ -74,11 +76,11 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: kart-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: kart
-      RABBITMQ_DEFAULT_PASS: kart123
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     ports:
       - "${RABBITMQ_AMQP_PORT}:5672" # AMQP - 5672 is commonly already taken
-      - "${RABBITMQ_UI_PORT}:15672"  # management UI - http://localhost:15672 (kart/kart123)
+      - "${RABBITMQ_UI_PORT}:15672"  # management UI - http://localhost:15672 (creds in infra.env)
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:

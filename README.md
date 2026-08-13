@@ -38,7 +38,7 @@ Then:
 | API Gateway (what the FE talks to) | http://localhost:8100 |
 | kart-web (storefront) | http://localhost:4210 |
 | kart-admin-web (back office) | http://localhost:4300 |
-| RabbitMQ management UI | http://localhost:15672 (`kart` / `kart123`) |
+| RabbitMQ management UI | http://localhost:15672 (default creds in [`infra.env.example`](infra.env.example), `kart` / `kart123`) |
 | Shared observability (Grafana etc.) | run `docker compose -f docker-compose.observability.yml up -d` alongside — see below |
 
 ### Why one shared `global.json`, not plain `environment:` vars
@@ -71,6 +71,26 @@ you put it. If you also run `kart-identity-service` bare-metal against
 `Mfa.Encryption.KeyBase64` values here instead of generating fresh ones, so tokens and MFA
 enrollments stay valid across both.
 
+### Shared infra credentials (`infra.env`)
+
+The shared `postgres`/`rabbitmq` containers' own bootstrap user/password aren't written directly
+into `docker-compose.yml` (that file is committed to git) — they're `${POSTGRES_USER}` /
+`${POSTGRES_PASSWORD}` / `${RABBITMQ_DEFAULT_USER}` / `${RABBITMQ_DEFAULT_PASS}` interpolated from
+`infra.env` (gitignored, same directory; shape documented in
+[`infra.env.example`](infra.env.example)), the same treatment `globalconfig.local.env` gets above.
+Unlike that file, these have a sensible default for local dev (throwaway creds, only reachable
+from your own machine), so `scripts/dev-up.sh` auto-copies `infra.env.example` to `infra.env` on
+first run instead of failing — no manual step needed unless you want non-default values.
+`scripts/dev-down.sh`/`dev-logs.sh`/`migrate-all.sh` already source or pass it the same way they
+do `ports.env`/`globalconfig.local.env`.
+
+**These must match `compose/globalconfig/global.json`.** Every per-service `ConnectionStrings`
+entry and the `Global.RabbitMq` block in your own `global.json` (copied from
+`compose/globalconfig/global.json.example`) already hardcode a Postgres/RabbitMQ
+username+password — that file is what services actually authenticate with, `infra.env` only
+configures the containers themselves. Change a credential in one without the other and every
+service fails to connect.
+
 Each container also mounts `compose/globalconfig/logs/<service>/` at `/var/log/kart/<service>` —
 `global.json`'s `Global:LogRoot` is `/var/log/kart`, so `Kart.Shared.Configuration` computes the
 exact same `{LogRoot}/{serviceName}` log directory formula Docker and bare-metal local dev both
@@ -81,12 +101,12 @@ same file the container's Serilog file sink writes.
 ### Ports
 
 **[`ports.env`](ports.env) is the single source of truth** for every host port in the table
-below -- not a secret (unlike `compose/globalconfig/`/`globalconfig.local.env`), committed to
-git, read directly by this file's own `${..._PORT}` interpolation. `scripts/dev-up.sh`/
-`dev-down.sh`/`dev-logs.sh` already pass `docker compose --env-file ports.env --env-file
-globalconfig.local.env`; run both flags yourself if you're calling `docker compose` directly
-instead of through those scripts. Change a port in exactly one place -- `ports.env` -- then
-update its non-Docker consumers listed below to match.
+below -- not a secret (unlike `compose/globalconfig/`/`globalconfig.local.env`/`infra.env`),
+committed to git, read directly by this file's own `${..._PORT}` interpolation.
+`scripts/dev-up.sh`/`dev-down.sh`/`dev-logs.sh` already pass `docker compose --env-file
+ports.env --env-file globalconfig.local.env --env-file infra.env`; run all three flags yourself
+if you're calling `docker compose` directly instead of through those scripts. Change a port in
+exactly one place -- `ports.env` -- then update its non-Docker consumers listed below to match.
 
 | Service | Host port |
 |---|---|
@@ -164,9 +184,9 @@ a service's own compose file and this stack side by side is not a supported comb
   forwarding only.
 - **No sharded Mongo, no per-service RabbitMQ users.** Several services' own individual
   `docker-compose.yml` run a 4-node sharded Mongo cluster or a service-specific RabbitMQ user —
-  simplified here to one single-node Mongo and one shared RabbitMQ user (`kart`/`kart123`) across
-  every service, since sharding/isolation is a staging concern (kind+Helm's job), not a feature-
-  dev-loop concern.
+  simplified here to one single-node Mongo and one shared RabbitMQ user (creds in `infra.env`,
+  default `kart`/`kart123`) across every service, since sharding/isolation is a staging concern
+  (kind+Helm's job), not a feature-dev-loop concern.
 - **App containers have no `HEALTHCHECK`.** Only ~7 of 13 services expose `/health/ready` at all,
   and the base ASP.NET runtime image has no `curl`/`wget` to probe it with anyway. `depends_on`
   gates on the *infra* containers' health (Postgres/Mongo/Redis/RabbitMQ all have real

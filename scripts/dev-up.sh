@@ -36,6 +36,18 @@ if [[ -z "${GLOBALCONFIG_PATH:-}" || ! -f "$GLOBALCONFIG_PATH" ]]; then
   exit 1
 fi
 
+# infra.env is gitignored and holds the shared postgres/rabbitmq containers' own bootstrap
+# credentials (see infra.env.example) -- kept out of docker-compose.yml itself so no credential
+# is written in plain text into a committed file. Unlike globalconfig.local.env's per-machine
+# path, these have a sensible throwaway default, so auto-copy the example instead of failing.
+if [[ ! -f infra.env ]]; then
+  echo "infra.env is missing -- creating it from infra.env.example (default dev-only creds)."
+  cp infra.env.example infra.env
+fi
+set -a
+source infra.env
+set +a
+
 # kart-commerce/ (the parent of every kart-*-service repo) isn't itself a git repo, so this
 # can't be committed anywhere -- several services build with that directory as their Docker
 # context (cross-repo ProjectReference to kart-shared) and Docker only reads a .dockerignore at
@@ -59,7 +71,7 @@ EOF
 fi
 
 echo "Building and starting the stack (this can take a while the first time)..."
-docker compose --env-file ports.env --env-file globalconfig.local.env up --build -d
+docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env up --build -d
 
 cat <<EOF
 
@@ -74,7 +86,7 @@ Once migrated:
   Gateway (what the FE talks to):     http://localhost:${GATEWAY_PORT}
   kart-web (storefront):              http://localhost:${WEB_PORT}
   kart-admin-web (back office):       http://localhost:${ADMIN_WEB_PORT}
-  RabbitMQ management UI:             http://localhost:${RABBITMQ_UI_PORT}  (kart / kart123)
+  RabbitMQ management UI:             http://localhost:${RABBITMQ_UI_PORT}  (${RABBITMQ_DEFAULT_USER} / ${RABBITMQ_DEFAULT_PASS})
 
 scripts/dev-down.sh stops everything. See README.md for the full port table and how this
 relates to kart-infra's kind/Helm cluster.

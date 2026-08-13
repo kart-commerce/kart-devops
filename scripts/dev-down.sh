@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 if [[ "${1:-}" == "-v" ]]; then
-  docker compose --env-file ports.env --env-file globalconfig.local.env down -v
+  docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env down -v
 else
-  docker compose --env-file ports.env --env-file globalconfig.local.env down
+  docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env down
 fi

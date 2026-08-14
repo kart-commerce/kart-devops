@@ -8,6 +8,18 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# docker-compose.yml and docker-compose.observability.yml are separate Compose projects, each
+# with its own default network by default -- so a container in one can't reach a container in
+# the other by name (or even by IP; Compose's per-project bridges are mutually isolated).
+# Both compose files declare their `default` network as this external, pre-existing one instead,
+# so every container from both stacks ends up on the same bridge and otel-collector:4317
+# resolves. Created here (idempotently -- `docker network create` on an existing name just
+# errors harmlessly, hence `|| true`) rather than owned by either compose file, so it exists
+# regardless of which stack comes up first, and regardless of SKIP_OBSERVABILITY_CHECK below
+# skipping the observability stack entirely (the main stack's own `docker compose up` still
+# needs this network to exist even when nothing is on the other side of it).
+docker network create kart-shared-net >/dev/null 2>&1 || true
+
 # Every backend service's Observability:Otlp:Endpoint points at the Collector unconditionally
 # (see compose/globalconfig) -- if the observability stack isn't up yet, every service still
 # boots fine (Kart.Shared.Observability treats a refused OTLP connection as a dropped export,

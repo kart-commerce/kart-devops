@@ -14,6 +14,14 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 source scripts/observability/lib/common.sh
 
+# docker-compose.observability.yml declares its default network as this external, pre-existing
+# one so its containers share a network with docker-compose.yml's business services (otherwise
+# otel-collector:4317 never resolves from the main stack -- see docker-compose.yml's networks:
+# comment). Created here too (not just dev-up.sh) so standalone usage of this stack -- see this
+# repo's own header comment: `docker compose -f <path>/docker-compose.observability.yml up -d`
+# from another repo, no script involved -- still works on a fresh machine.
+docker network create kart-shared-net >/dev/null 2>&1 || true
+
 TIMEOUT=60
 WAIT=true
 while [[ $# -gt 0 ]]; do

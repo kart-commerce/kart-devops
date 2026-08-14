@@ -482,3 +482,17 @@ volumes:
   mongo-data:
   rabbitmq-data:
   opensearch-data:
+
+# Every service above sets Observability:Otlp:Endpoint to http://otel-collector:4317, but
+# otel-collector lives in docker-compose.observability.yml -- a SEPARATE Compose project with
+# its own default network. Without this, that hostname never resolves (confirmed the hard way
+# 2026-08-14: DNS failure, and even a direct container-IP connection times out -- Compose's
+# per-project bridge networks are mutually isolated, not just unaware of each other's DNS), so
+# every service's logs/traces/metrics silently never leave the container. `external: true`
+# means this network must already exist -- scripts/dev-up.sh and scripts/observability/up.sh
+# both create it idempotently before either `docker compose up` runs, so ordering doesn't matter
+# regardless of which stack starts first.
+networks:
+  default:
+    name: kart-shared-net
+    external: true

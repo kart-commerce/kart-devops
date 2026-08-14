@@ -37,6 +37,14 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Grafana's own SQLite DB (dashboards, users, orgs, everything not provisioned from the
+      # read-only mount above) lives at /var/lib/grafana/grafana.db. Without a volume here it's
+      # just a layer in the container's own filesystem -- gone the instant the container is
+      # recreated (`docker compose up` after any config/image change, not just an explicit `down`
+      # -- confirmed the hard way 2026-08-14: an unrelated network config change recreated this
+      # container and every UI-built dashboard vanished with no warning). This volume alone
+      # survives any number of restarts/recreates; it only dies on `down -v` or `docker volume rm`.
+      - grafana-data:/var/lib/grafana
     depends_on:
       - loki
       - tempo
@@ -48,6 +56,11 @@ services:
     ports:
       - "3100:3100" # Loki push/query API (also accepts native OTLP logs at /otlp/v1/logs)
     command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      # Same class of bug as Grafana's dashboards: local-config.yaml's default storage path is
+      # /loki (chunks/index/wal), unmounted -- every container recreation silently threw away all
+      # log history. This volume makes log history survive recreation the same way.
+      - loki-data:/loki
 
   tempo:
     image: grafana/tempo:2.9.4
@@ -57,6 +70,9 @@ services:
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      # tempo.yaml's storage.trace.local.path/wal.path -- unmounted, trace history didn't survive
+      # container recreation either. Same fix as loki-data above.
+      - tempo-data:/var/tempo
 
   prometheus:
     image: prom/prometheus:v3.13.1
@@ -65,6 +81,9 @@ services:
       - "9090:9090" # Prometheus UI/API - http://localhost:9090
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Prometheus's TSDB default path -- unmounted, metric history didn't survive container
+      # recreation either. Same fix as loki-data/tempo-data above.
+      - prometheus-data:/prometheus
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.157.0
@@ -80,3 +99,20 @@ services:
       - loki
       - tempo
       - prometheus
+
+volumes:
+  grafana-data:
+  loki-data:
+  tempo-data:
+  prometheus-data:
+
+# docker-compose.yml's business services reach this stack's otel-collector by container DNS name
+# (http://otel-collector:4317) -- that only resolves if both Compose projects' containers share
+# an actual network, not just a host port mapping. `external: true` means this network must
+# already exist; scripts/observability/up.sh and scripts/dev-up.sh both create it idempotently
+# before either stack's `docker compose up` runs, so it's safe regardless of which one starts
+# first (see docker-compose.yml's own networks: comment for the full story).
+networks:
+  default:
+    name: kart-shared-net
+    external: true

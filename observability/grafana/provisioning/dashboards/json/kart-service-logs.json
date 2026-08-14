@@ -71,7 +71,7 @@
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
           "queryType": "range",
-          "expr": "sum by (service_name) (count_over_time({service_name=~\"$service\"} |= `$traceid` [$__auto]))",
+          "expr": "sum by (service_name) (count_over_time({service_name=~\"$service\"} | TraceId=~\".*$traceid.*\" [$__auto]))",
           "legendFormat": "{{service_name}}"
         }
       ]
@@ -97,7 +97,7 @@
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
           "queryType": "range",
-          "expr": "{service_name=~\"$service\"} |= `$traceid`",
+          "expr": "{service_name=~\"$service\"} | TraceId=~\".*$traceid.*\"",
           "maxLines": 1000
         }
       ]

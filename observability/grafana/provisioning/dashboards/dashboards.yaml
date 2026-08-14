@@ -1,0 +1,22 @@
+# Dashboard provisioning provider (Grafana's file-based provisioning, separate from the
+# datasources.yaml one directory up). Loads every *.json file in ./json on each Grafana startup
+# and keeps them in sync -- this is the part of dashboard persistence that survives more than a
+# container recreation: grafana-data (docker-compose.observability.yml) survives restarts and
+# recreates, but not `docker compose down -v`, a wiped Docker install, or a teammate's fresh
+# clone. A dashboard is only actually safe once its JSON lives here and is committed to git.
+#
+# See ./json/README.md for how to export a dashboard you built in the UI into this folder.
+
+apiVersion: 1
+
+providers:
+  - name: kart-dashboards
+    orgId: 1
+    folder: "" # top-level, not nested under a named folder
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true # UI edits are allowed day-to-day; export back to json/ to make them stick
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: true

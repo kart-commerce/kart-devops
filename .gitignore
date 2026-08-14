@@ -153,3 +153,9 @@ compose/globalconfig/*
 # actually lives (see globalconfig.local.env.example) -- deliberately not committed, so this repo
 # never records that location.
 globalconfig.local.env
+
+# Shared infra (postgres/rabbitmq) bootstrap credentials docker-compose.yml reads via
+# ${POSTGRES_USER}/${POSTGRES_PASSWORD}/${RABBITMQ_DEFAULT_USER}/${RABBITMQ_DEFAULT_PASS} --
+# see infra.env.example for the shape and why these stay out of docker-compose.yml itself.
+infra.env
+!infra.env.example

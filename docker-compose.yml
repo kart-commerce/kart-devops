@@ -20,10 +20,12 @@
 # kart-web's/kart-admin-web's .env.example/proxy.conf.json/app-config.ts) is documented as
 # mirroring. Every `${GLOBALCONFIG_PATH}` volume entry below comes from globalconfig.local.env
 # (gitignored, per-machine -- see globalconfig.local.env.example) instead, so this file never
-# records where any developer's real GlobalConfig JSON actually lives. scripts/dev-up.sh/
-# dev-down.sh/dev-logs.sh already pass both as `--env-file`; run `docker compose --env-file
-# ports.env --env-file globalconfig.local.env <command>` directly if you're not using those
-# scripts.
+# records where any developer's real GlobalConfig JSON actually lives. The shared postgres/
+# rabbitmq containers' own bootstrap credentials (`${POSTGRES_USER}` etc.) come the same way
+# from infra.env (gitignored -- see infra.env.example) instead of being written here in plain
+# text. scripts/dev-up.sh/dev-down.sh/dev-logs.sh already pass all three as `--env-file`; run
+# `docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env
+# <command>` directly if you're not using those scripts.
 
 services:
   # ---------------------------------------------------------------------------
@@ -33,8 +35,8 @@ services:
     image: postgres:16-alpine
     container_name: kart-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT}:5432" # 5432 is commonly already taken by a local Postgres install
     volumes:
@@ -74,11 +76,11 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: kart-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: kart
-      RABBITMQ_DEFAULT_PASS: kart123
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     ports:
       - "${RABBITMQ_AMQP_PORT}:5672" # AMQP - 5672 is commonly already taken
-      - "${RABBITMQ_UI_PORT}:15672"  # management UI - http://localhost:15672 (kart/kart123)
+      - "${RABBITMQ_UI_PORT}:15672"  # management UI - http://localhost:15672 (creds in infra.env)
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -432,6 +434,10 @@ services:
       NODE_ENV: production
       GATEWAY_BASE_URL: http://gateway:8080
       IDENTITY_SERVICE_BASE_URL: http://identity:8080
+      # Browser-reachable — used only for redirect Location headers (e.g. social login), never
+      # for this process's own server-to-server calls. Docker-internal hostnames like
+      # IDENTITY_SERVICE_BASE_URL above are unreachable from the end user's own browser.
+      IDENTITY_SERVICE_PUBLIC_BASE_URL: http://localhost:${IDENTITY_PORT}
       REDIS_URL: redis://redis:6379
       # @angular/ssr's built-in SSRF guard rejects a Host header it doesn't recognize -- it
       # checks the hostname only (port stripped), so this is "localhost", not "localhost:4210".
@@ -476,3 +482,17 @@ volumes:
   mongo-data:
   rabbitmq-data:
   opensearch-data:
+
+# Every service above sets Observability:Otlp:Endpoint to http://otel-collector:4317, but
+# otel-collector lives in docker-compose.observability.yml -- a SEPARATE Compose project with
+# its own default network. Without this, that hostname never resolves (confirmed the hard way
+# 2026-08-14: DNS failure, and even a direct container-IP connection times out -- Compose's
+# per-project bridge networks are mutually isolated, not just unaware of each other's DNS), so
+# every service's logs/traces/metrics silently never leave the container. `external: true`
+# means this network must already exist -- scripts/dev-up.sh and scripts/observability/up.sh
+# both create it idempotently before either `docker compose up` runs, so ordering doesn't matter
+# regardless of which stack starts first.
+networks:
+  default:
+    name: kart-shared-net
+    external: true

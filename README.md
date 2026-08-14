@@ -39,7 +39,7 @@ Then:
 | kart-web (storefront) | http://localhost:4210 |
 | kart-admin-web (back office) | http://localhost:4300 |
 | RabbitMQ management UI | http://localhost:15672 (default creds in [`infra.env.example`](infra.env.example), `kart` / `kart123`) |
-| Shared observability (Grafana etc.) | run `docker compose -f docker-compose.observability.yml up -d` alongside — see below |
+| Shared observability (Grafana etc.) | `scripts/dev-up.sh` already brings this up first (see below) — or run `scripts/observability/up.sh` alone |
 
 ### Why one shared `global.json`, not plain `environment:` vars
 
@@ -350,7 +350,10 @@ The shared local-dev Grafana + Loki + Tempo + Prometheus (+ OpenTelemetry Collec
 (`agent-reusables/docs/standards/observability-standards.md`, "Local Development"). Owned once,
 centrally, here - every service repo's own README should point developers at this file rather than
 copy-pasting one. See [`observability/README.md`](observability/README.md) for exposed ports, the
-default Grafana login, and usage.
+default Grafana login, and usage; [`scripts/observability/`](scripts/observability/README.md) for
+its up/down/restart/status/logs/debug/smoke-test scripts. `scripts/dev-up.sh` runs
+`scripts/observability/up.sh` as a pre-flight check before starting the main stack, so this is
+normally already running by the time you need it.
 
 ## What's not here yet
 

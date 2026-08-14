@@ -26,7 +26,16 @@ exporters:
   prometheus:
     endpoint: 0.0.0.0:8889
 
+# Exposes GET :13133/ -> 200 once the Collector has finished starting - the only way to health-
+# check the Collector itself from outside (it has no other HTTP endpoint that isn't a signal
+# receiver). scripts/observability/*.sh poll this; without it there'd be no way to distinguish
+# "container running" from "actually ready to accept OTLP traffic".
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 service:
+  extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]

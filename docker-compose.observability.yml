@@ -11,6 +11,19 @@
 #
 # Then point the service's OTLP exporter at the collector (grpc: localhost:4317, http: localhost:4318)
 # and open Grafana at http://localhost:3000 (default login admin/admin).
+#
+# `name:` below is load-bearing, not decorative: without an explicit project name, Compose
+# infers one from the current directory -- which, run from this repo's own root (exactly what
+# scripts/observability/*.sh do), collides with docker-compose.yml's own inferred project name
+# ("kart-devops"). `docker compose down` tears down its ENTIRE inferred project, not just the
+# services listed in the file you pointed it at -- so an unnamed `down -f
+# docker-compose.observability.yml` from this directory silently takes the whole main stack
+# (all 18 business services + Postgres/Mongo/Redis/RabbitMQ/OpenSearch) down with it. Confirmed
+# the hard way while building scripts/observability/ (2026-08-14) -- data volumes survived
+# (down without -v never touches them) but every container had to be recreated. This `name:`
+# makes the two stacks' projects permanently distinct regardless of which directory a command
+# happens to be run from.
+name: kart-observability
 
 services:
   grafana:
@@ -60,6 +73,7 @@ services:
       - "4317:4317" # OTLP gRPC - point OTEL_EXPORTER_OTLP_ENDPOINT here (grpc)
       - "4318:4318" # OTLP HTTP - point OTEL_EXPORTER_OTLP_ENDPOINT here (http/protobuf)
       - "8889:8889" # Prometheus-format metrics endpoint, scraped by the prometheus service above
+      - "13133:13133" # health_check extension - GET / -> 200 once ready (scripts/observability/*.sh use this)
     volumes:
       - ./observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:

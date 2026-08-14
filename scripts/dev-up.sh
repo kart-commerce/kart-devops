@@ -8,6 +8,24 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# Every backend service's Observability:Otlp:Endpoint points at the Collector unconditionally
+# (see compose/globalconfig) -- if the observability stack isn't up yet, every service still
+# boots fine (Kart.Shared.Observability treats a refused OTLP connection as a dropped export,
+# never a startup failure), but silently ships zero logs/traces/metrics until someone notices.
+# Catching that here, before the 22 real containers start, is cheap; catching it after because
+# Grafana came up empty is not. Bypass with SKIP_OBSERVABILITY_CHECK=1 if you deliberately don't
+# want the observability stack running (e.g. a low-memory machine).
+if [[ "${SKIP_OBSERVABILITY_CHECK:-}" != "1" ]]; then
+  echo "Verifying the observability stack (Grafana/Loki/Tempo/Prometheus/OTel Collector) is up and healthy..."
+  if ! scripts/observability/up.sh --timeout 90; then
+    echo >&2
+    echo "Observability stack isn't healthy -- aborting before starting the main stack." >&2
+    echo "Run scripts/observability/debug.sh for diagnostics, or SKIP_OBSERVABILITY_CHECK=1 $0 to bypass." >&2
+    exit 1
+  fi
+  echo
+fi
+
 # ports.env is the single source of truth for every host port below -- see its own header
 # comment and README.md's Ports table.
 set -a
@@ -69,6 +87,26 @@ if [[ ! -f "$PARENT_DOCKERIGNORE" ]]; then
 **/appsettings.Local.json
 EOF
 fi
+
+# Every service's Serilog file sink (kart-shared's ObservabilityExtensions.AddKartObservability)
+# writes into a bind-mounted host directory (docker-compose.yml's kart-internals/logs/<service>
+# volumes) as whichever user that service's container happens to run as -- some Dockerfiles drop
+# to a non-root UID, some don't, and that can change independently of this script. If Docker has
+# to auto-create one of these directories on first `up` it does so as root:root 0755, which a
+# non-root container user can't write into -- and Serilog swallows sink write failures silently
+# by default, so the log file just never appears with no error anywhere. Pre-creating every log
+# dir here (before Docker ever touches it) and keeping it world-writable sidesteps the UID
+# question entirely, so this can't regress no matter which user a given service's container ends
+# up running as.
+LOG_SERVICES=(identity category user product search inventory cart order payment offer wishlist notification delivery-tracking admin)
+for svc in "${LOG_SERVICES[@]}"; do
+  dir="../kart-internals/logs/$svc"
+  mkdir -p "$dir"
+  if ! chmod 777 "$dir" 2>/dev/null; then
+    echo "Warning: couldn't chmod $dir writable (likely root-owned from an old run) --" >&2
+    echo "that service's logs may silently fail to write. Fix once with: sudo chmod -R 777 $dir" >&2
+  fi
+done
 
 echo "Building and starting the stack (this can take a while the first time)..."
 docker compose --env-file ports.env --env-file globalconfig.local.env --env-file infra.env up --build -d

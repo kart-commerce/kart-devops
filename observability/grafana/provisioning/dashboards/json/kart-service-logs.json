@@ -1,0 +1,106 @@
+{
+  "uid": "kart-service-logs",
+  "title": "Kart Service Logs",
+  "description": "All Kart services' logs shipped via OTLP to Loki. Filter by service name and/or a trace id to pivot straight to the request that produced a given Tempo trace.",
+  "tags": ["kart", "logs", "loki"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "label": "Service",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values(service_name)",
+        "definition": "label_values(service_name)",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "hide": 0,
+        "skipUrlSync": false,
+        "regex": "",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "traceid",
+        "type": "textbox",
+        "label": "Trace ID",
+        "description": "Paste a TraceId (e.g. copied from a Tempo span) to narrow the logs below to that single trace. Leave blank to see all logs for the selected service(s).",
+        "query": "",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": { "selected": false, "text": "", "value": "" },
+        "options": [{ "selected": true, "text": "", "value": "" }]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Log volume by service",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "lineWidth": 0,
+            "pointSize": 0,
+            "stacking": { "mode": "normal", "group": "A" }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "sum by (service_name) (count_over_time({service_name=~\"$service\"} | TraceId=~\".*$traceid.*\" [$__auto]))",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 20, "w": 24, "x": 0, "y": 8 },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Ascending",
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "{service_name=~\"$service\"} | TraceId=~\".*$traceid.*\"",
+          "maxLines": 1000
+        }
+      ]
+    }
+  ]
+}

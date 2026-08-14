@@ -12,8 +12,16 @@
 # that don't have one yet.
 
 set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# infra.env holds the same postgres credentials docker-compose.yml bootstraps the shared
+# container with (see infra.env.example) -- source it here instead of hardcoding
+# Username=postgres;Password=postgres so this stays correct if those are ever changed.
+set -a
+source infra.env
+set +a
+
+ROOT="$(cd .. && pwd)"
 
 # name | repo | database | env var
 SERVICES=(
@@ -51,7 +59,7 @@ for entry in "${SERVICES[@]}"; do
   echo "== migrating $name ($db) =="
   (
     cd "$repo_path"
-    export "$envvar"="Host=localhost;Port=5433;Database=$db;Username=postgres;Password=postgres"
+    export "$envvar"="Host=localhost;Port=5433;Database=$db;Username=$POSTGRES_USER;Password=$POSTGRES_PASSWORD"
     dotnet tool restore >/dev/null
     dotnet ef database update --project "$infra_csproj" --startup-project "$infra_csproj"
   ) || FAILED+=("$name")

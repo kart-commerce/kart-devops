@@ -1,19 +1,15 @@
 {
-  "id": null,
   "uid": "kart-service-logs",
-  "title": "Service Logs",
+  "title": "Kart Service Logs",
   "description": "All Kart services' logs shipped via OTLP to Loki. Filter by service name and/or a trace id to pivot straight to the request that produced a given Tempo trace.",
   "tags": ["kart", "logs", "loki"],
   "timezone": "browser",
-  "editable": true,
-  "graphTooltip": 1,
   "schemaVersion": 39,
   "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
   "refresh": "30s",
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  },
+  "time": { "from": "now-1h", "to": "now" },
   "templating": {
     "list": [
       {
@@ -21,23 +17,17 @@
         "type": "query",
         "label": "Service",
         "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values(service_name)",
         "definition": "label_values(service_name)",
-        "query": {
-          "refId": "LokiVariableQueryEditor-VariableQuery",
-          "query": "label_values(service_name)"
-        },
-        "current": {
-          "selected": true,
-          "text": ["All"],
-          "value": ["$__all"]
-        },
-        "includeAll": true,
-        "multi": true,
-        "refresh": 2,
-        "regex": "",
+        "refresh": 1,
         "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
         "hide": 0,
-        "skipUrlSync": false
+        "skipUrlSync": false,
+        "regex": "",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] }
       },
       {
         "name": "traceid",
@@ -45,16 +35,10 @@
         "label": "Trace ID",
         "description": "Paste a TraceId (e.g. copied from a Tempo span) to narrow the logs below to that single trace. Leave blank to see all logs for the selected service(s).",
         "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          { "selected": true, "text": "", "value": "" }
-        ],
         "hide": 0,
-        "skipUrlSync": false
+        "skipUrlSync": false,
+        "current": { "selected": false, "text": "", "value": "" },
+        "options": [{ "selected": true, "text": "", "value": "" }]
       }
     ]
   },
@@ -65,6 +49,23 @@
       "title": "Log volume by service",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "lineWidth": 0,
+            "pointSize": 0,
+            "stacking": { "mode": "normal", "group": "A" }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
       "targets": [
         {
           "refId": "A",
@@ -73,24 +74,7 @@
           "expr": "sum by (service_name) (count_over_time({service_name=~\"$service\"} |= `$traceid` [$__auto]))",
           "legendFormat": "{{service_name}}"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 100,
-            "stacking": { "mode": "normal", "group": "A" },
-            "lineWidth": 0,
-            "pointSize": 0
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      }
+      ]
     },
     {
       "id": 2,
@@ -98,6 +82,16 @@
       "title": "Logs",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 20, "w": 24, "x": 0, "y": 8 },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      },
       "targets": [
         {
           "refId": "A",
@@ -106,17 +100,7 @@
           "expr": "{service_name=~\"$service\"} |= `$traceid`",
           "maxLines": 1000
         }
-      ],
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      }
+      ]
     }
   ]
 }

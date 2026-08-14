@@ -122,9 +122,6 @@
       "description": "Full waterfall for the Trace ID above.",
       "datasource": { "type": "tempo", "uid": "tempo" },
       "gridPos": { "h": 17, "w": 24, "x": 0, "y": 11 },
-      "options": {
-        "spanFilters": { "matchesOnly": false, "criticalPathOnly": false }
-      },
       "targets": [
         {
           "refId": "A",

@@ -89,7 +89,7 @@
         "wrapLogMessage": true,
         "prettifyLogMessage": false,
         "enableLogDetails": true,
-        "sortOrder": "Descending",
+        "sortOrder": "Ascending",
         "dedupStrategy": "none"
       },
       "targets": [

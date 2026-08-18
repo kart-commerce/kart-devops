@@ -99,6 +99,15 @@
         "Identity": { "BaseUrl": "http://identity:8080" },
         "Inventory": { "BaseUrl": "http://inventory:8080" }
       }
+    },
+    "kart-recommendation-service": {
+      "_comment": "No PostgreSQL write side at all (database-design.md's Architecture Note) - MongoDB is this service's sole store. Kafka__BootstrapServers points at the shared kafka container's own internal listener (kafka:29092), never its EXTERNAL host-mapped one (KAFKA_PORT in ports.env).",
+      "Mongo": { "ConnectionString": "mongodb://mongo:27017", "Database": "kart_recommendation" },
+      "Redis": { "ConnectionString": "redis:6379" },
+      "RabbitMq": { "HostName": "rabbitmq", "Port": 5672, "UserName": "kart", "Password": "kart123" },
+      "Kafka": { "BootstrapServers": "kafka:29092" },
+      "ExternalServices": { "InventoryBaseUrl": "http://inventory:8080", "ProductBaseUrl": "http://product:8080" },
+      "Jwt": { "Issuer": "kart-identity-service", "JwksUri": "http://identity:8080/.well-known/jwks.json" }
     }
   }
 }

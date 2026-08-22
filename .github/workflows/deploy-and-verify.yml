@@ -1,0 +1,122 @@
+name: Deploy & Verify (Reusable)
+
+# Reusable deploy workflow, called from a service repo's own CI/CD after dotnet-service-ci.yml /
+# angular-app-ci.yml and docker-build-push.yml have both gone green (PLATFORM_BLUEPRINT.md
+# S2.4/S2.5, kart-conventions.md "CI: service repos call the reusable workflow published from
+# kart-devops"). Closes the two Quality Gate table (S11) rows that had no automation until now:
+#
+#   Deployment Verification -> `helm upgrade --atomic` (auto-rollback if the rollout itself never
+#     reaches Ready within --timeout) PLUS an explicit post-rollout smoke test against the real
+#     ingress -- --atomic alone only catches a pod that never becomes Ready; it does not catch a
+#     pod that's Ready but the app underneath is actually broken, which is exactly what the smoke
+#     test step below exists to catch.
+#   Rollback Strategy -> `helm rollback` runs automatically on smoke-test failure, restoring the
+#     previous revision before the job is marked failed -- a failed deploy never gets to leave the
+#     cluster in a half-upgraded state for someone to discover later.
+#
+# Targets a real long-lived cluster (local kind for now, per docs/adr/0001-local-cluster-tool-kind.md;
+# a real staging cluster later without changing this workflow's shape) reached via a self-hosted
+# runner or a kubeconfig secret -- GitHub-hosted runners have no route to a local kind cluster, so
+# this workflow is meant to run on a runner that does, not on ubuntu-latest by default.
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: "Release name / values-<service>.yaml basename, e.g. kart-category-service."
+        required: true
+        type: string
+      namespace:
+        description: "Kubernetes namespace to deploy into (created if it doesn't exist)."
+        required: true
+        type: string
+      chart-ref:
+        description: "kart-infra git ref to pull helm/service-chart from (defaults to main)."
+        required: false
+        type: string
+        default: "main"
+      values-file:
+        description: "Path to this service's own values-<service>.yaml, relative to the caller repo root."
+        required: true
+        type: string
+      image-repository:
+        description: "Image repository to deploy (e.g. ghcr.io/kart-commerce/kart-category-service)."
+        required: true
+        type: string
+      image-tag:
+        description: "Image tag to deploy (the git-SHA tag docker-build-push.yml just published)."
+        required: true
+        type: string
+      smoke-test-host:
+        description: "Ingress host to smoke-test through (e.g. kart-category-service.local)."
+        required: true
+        type: string
+      smoke-test-path:
+        description: "HTTP path to request for the smoke test."
+        required: false
+        type: string
+        default: "/health/live"
+      helm-timeout:
+        description: "Timeout for `helm upgrade --atomic` to reach Ready before auto-rollback."
+        required: false
+        type: string
+        default: "5m"
+    secrets:
+      kubeconfig:
+        description: "Raw kubeconfig contents for the target cluster (kind locally, a real staging cluster later)."
+        required: true
+
+jobs:
+  deploy-and-verify:
+    name: Deploy & Verify
+    runs-on: [self-hosted, kart-cluster-access]
+    steps:
+      - name: Checkout caller repo (values file)
+        uses: actions/checkout@v4
+        with:
+          path: caller
+
+      - name: Checkout kart-infra (chart source)
+        uses: actions/checkout@v4
+        with:
+          repository: kart-commerce/kart-infra
+          ref: ${{ inputs.chart-ref }}
+          path: kart-infra
+
+      - name: Write kubeconfig
+        run: |
+          umask 077
+          printf '%s' "${{ secrets.kubeconfig }}" > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: helm upgrade --install --atomic (rolls back automatically if rollout never becomes Ready)
+        run: |
+          helm upgrade --install "${{ inputs.service-name }}" kart-infra/helm/service-chart \
+            --namespace "${{ inputs.namespace }}" --create-namespace \
+            -f "caller/${{ inputs.values-file }}" \
+            --set image.repository="${{ inputs.image-repository }}" \
+            --set image.tag="${{ inputs.image-tag }}" \
+            --atomic --timeout "${{ inputs.helm-timeout }}"
+
+      - name: Smoke test through the real ingress
+        id: smoke
+        continue-on-error: true
+        run: |
+          set -e
+          status=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -H "Host: ${{ inputs.smoke-test-host }}" \
+            --retry 5 --retry-connrefused --retry-delay 3 \
+            "https://localhost:8443${{ inputs.smoke-test-path }}")
+          echo "Smoke test HTTP status: $status"
+          [ "$status" = "200" ]
+
+      - name: Rollback on failed smoke test
+        if: steps.smoke.outcome == 'failure'
+        run: |
+          echo "::error::Smoke test failed post-deploy -- rolling back ${{ inputs.service-name }} to the previous revision."
+          helm rollback "${{ inputs.service-name }}" 0 --namespace "${{ inputs.namespace }}" --wait --timeout "${{ inputs.helm-timeout }}"
+          exit 1
+
+      - name: Confirm deployed revision
+        if: steps.smoke.outcome != 'failure'
+        run: helm status "${{ inputs.service-name }}" --namespace "${{ inputs.namespace }}"

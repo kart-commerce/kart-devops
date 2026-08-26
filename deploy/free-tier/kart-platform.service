@@ -1,0 +1,36 @@
+# systemd unit that brings the whole stack up on boot and keeps it reconciled if you re-run
+# `systemctl restart kart-platform` after a `git pull`. Install with:
+#
+#   sudo cp deploy/free-tier/kart-platform.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now kart-platform
+#
+# Edit the two paths below (User=, WorkingDirectory=) if your checkout isn't at the default
+# ~/kart-commerce/kart-devops from bootstrap-vm.sh.
+
+[Unit]
+Description=Kart platform (docker compose, free-tier prod overlay)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=ubuntu
+WorkingDirectory=/home/ubuntu/kart-commerce/kart-devops
+ExecStartPre=-/usr/bin/docker network create kart-shared-net
+ExecStart=/usr/bin/docker compose \
+  --env-file ports.env --env-file globalconfig.local.env --env-file infra.env \
+  -f docker-compose.yml -f docker-compose.observability.yml \
+  -f deploy/free-tier/docker-compose.prod.yml \
+  up -d --build
+ExecStop=/usr/bin/docker compose \
+  --env-file ports.env --env-file globalconfig.local.env --env-file infra.env \
+  -f docker-compose.yml -f docker-compose.observability.yml \
+  -f deploy/free-tier/docker-compose.prod.yml \
+  down
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

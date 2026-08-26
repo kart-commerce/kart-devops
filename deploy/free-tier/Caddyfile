@@ -1,0 +1,30 @@
+# Caddy is the only container that publishes a host port (80/443) — see docker-compose.prod.yml's
+# header comment for why everything else stays off the host network entirely. Caddy gets
+# automatic HTTPS (Let's Encrypt, auto-renewed) for free, zero extra config beyond an email.
+#
+# Replace the three placeholders below with your own three DuckDNS hostnames (or any domain you
+# control — DuckDNS is just the free option this guide uses) before copying this file to the VM.
+# All three must already resolve to the VM's public IP (duckdns-update.sh handles that) before
+# Caddy can request certificates for them — Let's Encrypt's HTTP-01 challenge needs port 80
+# reachable from the public internet on the domain being certified.
+#
+# YOUR_EMAIL is only used for Let's Encrypt renewal/expiry notices, never shown publicly.
+
+{
+	email YOUR_EMAIL
+}
+
+# Storefront (kart-web) — what a recruiter/CTO actually clicks.
+kart-web-demo.duckdns.org {
+	reverse_proxy web:4000
+}
+
+# Admin/back-office (kart-admin-web).
+kart-admin-demo.duckdns.org {
+	reverse_proxy admin-web:4000
+}
+
+# API gateway — lets you point Postman/curl/a "try the API" link at something real.
+kart-api-demo.duckdns.org {
+	reverse_proxy gateway:8080
+}

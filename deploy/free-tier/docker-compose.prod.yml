@@ -1,0 +1,106 @@
+# Production-hardening overlay for a public, free-tier VM deploy — layer on top of the base
+# stack with:
+#
+#   docker compose \
+#     --env-file ports.env --env-file globalconfig.local.env --env-file infra.env \
+#     -f docker-compose.yml -f docker-compose.observability.yml \
+#     -f deploy/free-tier/docker-compose.prod.yml \
+#     up -d --build
+#
+# What this changes vs. the dev-only docker-compose.yml, and why:
+#
+# 1. `restart: unless-stopped` on every container — the base file has no restart policy at all
+#    (fine for a dev box you start by hand; fatal for a VM that reboots for kernel patching, or
+#    a container that OOMs once under real traffic and never comes back).
+#
+# 2. Every app/infra service's `ports:` host-publish is REMOVED here, EXCEPT postgres which is
+#    rebound to 127.0.0.1 only (loopback, not 0.0.0.0). Publishing a container port normally
+#    binds it to 0.0.0.0 by manipulating iptables directly — a well-known Docker/ufw gotcha where
+#    the host's own firewall rules do NOT protect a published container port, only the cloud
+#    provider's network-level security list does. Rather than depend on getting that right at two
+#    layers, nothing except Caddy (added below) is reachable from outside the VM. Postgres stays
+#    on loopback-only 5433 because scripts/migrate-all.sh runs `dotnet ef database update` from
+#    the VM's own host shell (not a container) against localhost:5433 — see this folder's
+#    README "Bring it up" section for the one-time SDK install that needs. Every service is
+#    still reachable by every other container via kart-shared-net's Docker DNS (gateway, product,
+#    etc.) exactly as before — only the host-external exposure changes.
+#
+# 3. Caddy is added as the single public entry point (ports 80/443), reverse-proxying to
+#    container names on the same external kart-shared-net network. Automatic HTTPS via Let's
+#    Encrypt, config in ./Caddyfile (fill in your DuckDNS hostnames + email first).
+#
+# 4. kart-web and kart-identity-service get their public-facing URLs corrected from the
+#    dev-only `localhost` defaults to your real domain — @angular/ssr's SSRF guard
+#    (NG_ALLOWED_HOSTS) and Identity's OAuth/social-login redirect base
+#    (PublicWebBaseUrl / IDENTITY_SERVICE_PUBLIC_BASE_URL) both hard-fail or silently redirect
+#    to the wrong place otherwise. Search each service's own appsettings.json for other
+#    `localhost` occurrences before calling this "done" — this overlay only fixes the two
+#    confirmed at doc-writing time (see this folder's README "Known gaps" section).
+#
+# Substitute YOUR_DOMAIN (all three occurrences) before using this file — e.g. via
+# `envsubst < docker-compose.prod.yml` or a plain find/replace. Kept as a literal placeholder
+# rather than another ${VAR} so a missing env var can't silently fall through to "localhost".
+
+services:
+  postgres:      { restart: unless-stopped, ports: !reset ["127.0.0.1:5433:5432"] }
+  mongo:         { restart: unless-stopped, ports: !reset [] }
+  redis:         { restart: unless-stopped, ports: !reset [] }
+  rabbitmq:      { restart: unless-stopped, ports: !reset [] }
+  opensearch:    { restart: unless-stopped, ports: !reset [] }
+  kafka:         { restart: unless-stopped, ports: !reset [] }
+
+  identity:            { restart: unless-stopped, ports: !reset [] }
+  category:            { restart: unless-stopped, ports: !reset [] }
+  user:                { restart: unless-stopped, ports: !reset [] }
+  product:             { restart: unless-stopped, ports: !reset [] }
+  search:              { restart: unless-stopped, ports: !reset [] }
+  inventory:           { restart: unless-stopped, ports: !reset [] }
+  cart:                { restart: unless-stopped, ports: !reset [] }
+  order:               { restart: unless-stopped, ports: !reset [] }
+  payment:             { restart: unless-stopped, ports: !reset [] }
+  offer:               { restart: unless-stopped, ports: !reset [] }
+  wishlist:            { restart: unless-stopped, ports: !reset [] }
+  notification:        { restart: unless-stopped, ports: !reset [] }
+  delivery-tracking:   { restart: unless-stopped, ports: !reset [] }
+  admin:               { restart: unless-stopped, ports: !reset [] }
+  recommendation:      { restart: unless-stopped, ports: !reset [] }
+
+  gateway:
+    restart: unless-stopped
+    ports: !reset []
+
+  web:
+    restart: unless-stopped
+    ports: !reset []
+    environment:
+      IDENTITY_SERVICE_PUBLIC_BASE_URL: https://YOUR_DOMAIN
+      NG_ALLOWED_HOSTS: "YOUR_DOMAIN"
+
+  admin-web:
+    restart: unless-stopped
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: kart-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      gateway: { condition: service_started }
+      web: { condition: service_started }
+      admin-web: { condition: service_started }
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  default:
+    name: kart-shared-net
+    external: true

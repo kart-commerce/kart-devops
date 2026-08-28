@@ -1,0 +1,158 @@
+{
+  "uid": "kart-tracing",
+  "title": "Kart Tracing",
+  "description": "Distributed traces across all Kart services, shipped via OTLP to Tempo. Filter by service to browse recent traces, or click a row to view its full waterfall.",
+  "tags": ["kart", "tracing", "tempo"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "label": "Service",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values(service_name)",
+        "definition": "label_values(service_name)",
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "hide": 0,
+        "skipUrlSync": false,
+        "regex": "",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "traceid",
+        "type": "textbox",
+        "label": "Trace ID",
+        "description": "Paste a Trace ID to view its full waterfall below, or click \"View trace\" on a row in the Recent Traces table.",
+        "query": "",
+        "hide": 0,
+        "skipUrlSync": false,
+        "current": { "selected": false, "text": "", "value": "" },
+        "options": [{ "selected": true, "text": "", "value": "" }]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Recent Traces",
+      "description": "TraceQL search scoped to the selected service(s). Click \"View trace\" on a row to load its waterfall below.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "traceID" },
+            "properties": [{ "id": "displayName", "value": "Trace ID" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "startTime" },
+            "properties": [{ "id": "displayName", "value": "Started" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "traceService" },
+            "properties": [{ "id": "displayName", "value": "Root Service" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "traceName" },
+            "properties": [{ "id": "displayName", "value": "Root Span" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "traceDuration" },
+            "properties": [
+              { "id": "displayName", "value": "Duration" },
+              { "id": "unit", "value": "ms" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Open" },
+            "properties": [
+              { "id": "displayName", "value": "" },
+              { "id": "custom.width", "value": 110 },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "regex", "options": { "pattern": ".*", "result": { "text": "View trace →" } } }
+                ]
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View trace",
+                    "url": "/d/kart-tracing/kart-tracing?var-traceid=${__value.raw}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Open",
+            "mode": "reduceRow",
+            "reduce": { "include": ["traceID"], "reducer": "lastNotNull" }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "nested": true },
+            "indexByName": {
+              "traceID": 0,
+              "startTime": 1,
+              "traceService": 2,
+              "traceName": 3,
+              "traceDuration": 4,
+              "Open": 5
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "query": "{resource.service.name=~\"$service\"}",
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "traces",
+      "title": "Trace Detail",
+      "description": "Full waterfall for the Trace ID above.",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "gridPos": { "h": 17, "w": 24, "x": 0, "y": 11 },
+      "options": {
+        "spanFilters": { "matchesOnly": false, "criticalPathOnly": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "query": "$traceid"
+        }
+      ]
+    }
+  ]
+}

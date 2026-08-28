@@ -125,8 +125,9 @@ exactly one place -- `ports.env` -- then update its non-Docker consumers listed 
 | notification | 8092 |
 | delivery-tracking | 8093 |
 | admin | 8094 |
+| recommendation | 8095 |
 | web / admin-web | 4210 / 4300 |
-| postgres / mongo / redis / rabbitmq / opensearch | 5433 / 27018 / 6380 / 5673 (+15672 UI) / 9200 |
+| postgres / mongo / redis / rabbitmq / opensearch / kafka | 5433 / 27018 / 6380 / 5673 (+15672 UI) / 9200 / 9093 |
 
 Several host ports are shifted off their conventional defaults (gateway 8100 not 8080, web 4210
 not 4200, postgres 5433, mongo 27018, redis 6380, rabbitmq 5673) because dev machines commonly
